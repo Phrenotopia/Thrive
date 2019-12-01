@@ -69,11 +69,7 @@ void cellHitEngulfable(GameWorld@ world, ObjectID firstEntity, ObjectID secondEn
 }
 
 // Used for chunks that also can damage
-void cellHitDamageChunk(GameWorld@ world,
-    ObjectID firstEntity,
-    ObjectID secondEntity,
-    const PhysicsShape@ contactShape,
-    int cellSubCollision)
+void cellHitDamageChunk(GameWorld@ world, ObjectID firstEntity, ObjectID secondEntity)
 {
     // Determine which is the chunk
     CellStageWorld@ asCellWorld = cast<CellStageWorld>(world);
@@ -88,10 +84,6 @@ void cellHitDamageChunk(GameWorld@ world,
         floatingEntity = secondEntity;
         cellEntity = firstEntity;
     }
-    bool isPilus = contactShape.GetChildCustomTag(cellSubCollision) ==
-        PHYSICS_PILUS_TAG;
-    LOG_INFO("" + isPilus);
-
     auto damage = asCellWorld.GetComponent_DamageOnTouchComponent(floatingEntity);
     MicrobeComponent@ microbeComponent = MicrobeOperations::getMicrobeComponent(asCellWorld,cellEntity);
 
@@ -137,16 +129,8 @@ void cellHitDamageChunk(GameWorld@ world,
 // Cell Hit Oxytoxy
 // We can make this generic using the dictionary in agents.as
 // eventually, but for now all we have is oxytoxy
-void cellHitAgent(GameWorld@ world,
-    ObjectID firstEntity,
-    ObjectID secondEntity,
-    const PhysicsShape@ contactShape,
-    int cellSubCollision)
+void cellHitAgent(GameWorld@ world, ObjectID firstEntity, ObjectID secondEntity)
 {
-
-    bool isPilus = contactShape.GetChildCustomTag(cellSubCollision) ==
-        PHYSICS_PILUS_TAG;
-    LOG_INFO("" + isPilus);
     // Determine which is the organelle
     CellStageWorld@ asCellWorld = cast<CellStageWorld>(world);
 
