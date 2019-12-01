@@ -248,6 +248,7 @@ void
         Leviathan::PhysicsBody& second,
         const btPersistentManifold& manifold)
 {
+    // This will call a script that pulls cells in towards engulfers
     GameWorld* gameWorld = physicalWorld.GetGameWorld();
 	
 	Leviathan::PhysicsShape* shape = second.GetShape();
