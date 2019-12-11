@@ -129,25 +129,78 @@ bool
 // ------------------------------------ //
 // Physics materials
 void
-    cellHitEngulfable(Leviathan::PhysicalWorld& physicalWorld,
+    cellHitEngulfableManifold(Leviathan::PhysicalWorld& physicalWorld,
         Leviathan::PhysicsBody& first,
-        Leviathan::PhysicsBody& second)
+        Leviathan::PhysicsBody& second,
+        const btPersistentManifold& manifold)
 {
     GameWorld* gameWorld = physicalWorld.GetGameWorld();
+    auto holder = gameWorld->GetScriptComponentHolder("MicrobeComponent");
+    LEVIATHAN_ASSERT(holder, "GameWorld has no microbe component holder");
+
+	 Leviathan::PhysicsShape* cellShape = first.GetShape();
+     Leviathan::PhysicsShape* otherShape = second.GetShape();
 
     ScriptRunningSetup setup("cellHitEngulfable");
 
-    auto result =
-        ThriveCommon::get()->getMicrobeScripts()->ExecuteOnModule<void>(setup,
-            false, gameWorld, first.GetOwningEntity(),
-            second.GetOwningEntity());
+   // The world will hold this object while we do our thing so we can
+    // immediately release our reference
+    holder->Release();
 
-    if(result.Result != SCRIPT_RUN_RESULT::Success)
-        LOG_ERROR("Failed to run script side cellHitEngulfable");
+    asIScriptObject* microbeComponent = nullptr;
+    ObjectID otherId;
+    ObjectID cellEntity;
+    int cellSubCollision;
+
+    const int numContacts = manifold.getNumContacts();
+
+    for(int i = 0; i < numContacts; ++i) {
+
+        const btManifoldPoint& contactPoint = manifold.getContactPoint(i);
+
+        if(contactPoint.getDistance() < 0.f) {
+            if(!microbeComponent) {
+
+                // The holder will keep the references alive, so we can release
+                // them immediately
+                microbeComponent = holder->Find(first.GetOwningEntity());
+
+                if(!microbeComponent) {
+                    microbeComponent = holder->Find(second.GetOwningEntity());
+                    std::swap(cellShape, otherShape);
+                    otherId = first.GetOwningEntity();
+                    cellEntity = second.GetOwningEntity();
+                    cellSubCollision = contactPoint.m_index1;
+                } else {
+                    otherId = second.GetOwningEntity();
+                    cellEntity = first.GetOwningEntity();
+                    cellSubCollision = contactPoint.m_index0;
+                }
+
+                if(!microbeComponent)
+                    return;
+
+                microbeComponent->Release();
+            }
+
+            auto returned =
+                ThriveCommon::get()->getMicrobeScripts()->ExecuteOnModule<bool>(
+                    setup, false, gameWorld, otherId, cellEntity,
+                    microbeComponent, cellShape, cellSubCollision);
+
+            if(returned.Result != SCRIPT_RUN_RESULT::Success) {
+                LOG_ERROR("Failed to run script side cell on agent collision");
+                break;
+            }
+
+            if(returned.Value)
+                break;
+        }
+    }
 }
 
 void
-    cellHitDamageChunk(Leviathan::PhysicalWorld& physicalWorld,
+    cellHitDamageChunkManifold(Leviathan::PhysicalWorld& physicalWorld,
         Leviathan::PhysicsBody& first,
         Leviathan::PhysicsBody& second,
         const btPersistentManifold& manifold)
@@ -378,9 +431,9 @@ std::unique_ptr<Leviathan::PhysicsMaterialManager>
     // Chunks
     // These two should be still updated
     cellMaterial->FormPairWith(*engulfableMaterial)
-        .SetCallbacks(nullptr, cellHitEngulfable);
+            .SetCallbacks(nullptr, nullptr, cellHitEngulfableManifold);
     cellMaterial->FormPairWith(*chunkDamageMaterial)
-        .SetCallbacks(nullptr, nullptr, cellHitDamageChunk);
+        .SetCallbacks(nullptr, nullptr, cellHitDamageChunkManifold);
     // to be like this (copy code from agentCollidedManifold):
     // cellMaterial->FormPairWith(*engulfableMaterial)
     //     .SetCallbacks(nullptr, cellHitEngulfableManifold);

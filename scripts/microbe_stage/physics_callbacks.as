@@ -1,23 +1,17 @@
 // Callbacks for cell stage physics materials
 
 // Used for chunks
-void cellHitEngulfable(GameWorld@ world, ObjectID firstEntity, ObjectID secondEntity)
+bool cellHitEngulfable(GameWorld@ world,
+    ObjectID floatingEntity,
+    ObjectID cellEntity,
+    MicrobeComponent@ microbeComponent,
+    const PhysicsShape@ cellShape,
+    int cellSubCollision)
 {
     // Determine which is the chunk
     CellStageWorld@ asCellWorld = cast<CellStageWorld>(world);
 
-    auto model = asCellWorld.GetComponent_Model(firstEntity);
-    auto floatingEntity = firstEntity;
-    auto cellEntity = secondEntity;
-
-    // Cell doesn't have a model
-    if(model is null){
-
-        @model = asCellWorld.GetComponent_Model(secondEntity);
-        floatingEntity = secondEntity;
-        cellEntity = firstEntity;
-    }
-    auto microbeComponent = MicrobeOperations::getMicrobeComponent(asCellWorld,cellEntity);
+    auto model = asCellWorld.GetComponent_Model(cellEntity);
 
     auto engulfableComponent = asCellWorld.GetComponent_EngulfableComponent(floatingEntity);
 
@@ -42,41 +36,44 @@ void cellHitEngulfable(GameWorld@ world, ObjectID firstEntity, ObjectID secondEn
             world.QueueDestroyEntity(floatingEntity);
         }
     }
+    return true;
 }
 
 // Used for chunks that also can damage
 void cellHitDamageChunk(GameWorld@ world,
-    ObjectID firstEntity,
-    ObjectID secondEntity,
-    const PhysicsShape@ contactShape,
+    ObjectID floatingEntity,
+    ObjectID cellEntity,
+    const PhysicsShape@ cellShape,
     int cellSubCollision)
 {
     // Determine which is the chunk
     CellStageWorld@ asCellWorld = cast<CellStageWorld>(world);
 
-    auto model = asCellWorld.GetComponent_Model(firstEntity);
-    auto floatingEntity = firstEntity;
-    auto cellEntity = secondEntity;
+    auto model = asCellWorld.GetComponent_Model(cellEntity);
     bool disappear=false;
-    // Cell doesn't have a model
-    if(model is null){
-        @model = asCellWorld.GetComponent_Model(secondEntity);
-        floatingEntity = secondEntity;
-        cellEntity = firstEntity;
-    }
-    bool isPilus = contactShape.GetChildCustomTag(cellSubCollision) ==
+
+    bool isPilus = cellShape.GetChildCustomTag(cellSubCollision) ==
         PHYSICS_PILUS_TAG;
-    LOG_INFO("" + isPilus);
+
+    if(isPilus) {
+        world.QueueDestroyEntity(floatingEntity);
+        return;
+    }
 
     auto damage = asCellWorld.GetComponent_DamageOnTouchComponent(floatingEntity);
+
     MicrobeComponent@ microbeComponent = MicrobeOperations::getMicrobeComponent(asCellWorld,cellEntity);
 
     if (damage !is null && microbeComponent !is null){
-        if (damage.getDeletes() && !microbeComponent.dead){
+        // If we hit a to
+        if(!damage.getDeletes() && isPilus) {
+            world.QueueDestroyEntity(floatingEntity);
+        }
+        else if (damage.getDeletes() && !microbeComponent.dead){
             MicrobeOperations::damage(asCellWorld, cellEntity, double(damage.getDamage()), "toxin");
             disappear=true;
         }
-        else if (!damage.getDeletes() && !microbeComponent.dead){
+        else if (!damage.getDeletes() && !microbeComponent.dead ){
             MicrobeOperations::damage(asCellWorld, cellEntity, double(damage.getDamage()), "chunk");
         }
     }
@@ -112,7 +109,7 @@ void cellHitDamageChunk(GameWorld@ world,
 // Actual collision between agent and cell, applies damage and removes
 // the agent if the hit was valid
 bool cellHitAgent(GameWorld@ world,
-    ObjectID otherEntity,
+    ObjectID floatingEntity,
     ObjectID cellEntity,
     MicrobeComponent@ microbeComponent,
     const PhysicsShape@ cellShape,
@@ -121,14 +118,15 @@ bool cellHitAgent(GameWorld@ world,
     bool isPilus = cellShape.GetChildCustomTag(cellSubCollision) ==
         PHYSICS_PILUS_TAG;
 
-    // Agent can't hit through a pilus
-    if(isPilus)
+    if(isPilus) {
+        world.QueueDestroyEntity(floatingEntity);
         return false;
+    }
 
     CellStageWorld@ asCellWorld = cast<CellStageWorld>(world);
 
     AgentProperties@ propertiesComponent =
-        asCellWorld.GetComponent_AgentProperties(otherEntity);
+        asCellWorld.GetComponent_AgentProperties(floatingEntity);
 
     if (propertiesComponent !is null){
         if (propertiesComponent.getSpeciesName() != microbeComponent.species.name &&
@@ -136,7 +134,7 @@ bool cellHitAgent(GameWorld@ world,
 
             MicrobeOperations::damage(asCellWorld, cellEntity, double(OXY_TOXY_DAMAGE),
                 "toxin");
-            world.QueueDestroyEntity(otherEntity);
+            world.QueueDestroyEntity(floatingEntity);
         }
     }
 
