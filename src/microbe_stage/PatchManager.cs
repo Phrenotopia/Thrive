@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 using Godot;
 
 /// <summary>
@@ -12,6 +12,7 @@ public class PatchManager
     private ProcessSystem processSystem;
     private CompoundCloudSystem compoundCloudSystem;
     private TimedLifeSystem timedLife;
+    private DirectionalLight worldLight;
     private GameProperties currentGame;
 
     private Patch previousPatch;
@@ -22,12 +23,14 @@ public class PatchManager
     private List<CreatedSpawner> microbeSpawners = new List<CreatedSpawner>();
 
     public PatchManager(SpawnSystem spawnSystem, ProcessSystem processSystem,
-        CompoundCloudSystem compoundCloudSystem, TimedLifeSystem timedLife, GameProperties currentGame)
+        CompoundCloudSystem compoundCloudSystem, TimedLifeSystem timedLife, DirectionalLight worldLight,
+        GameProperties currentGame)
     {
         this.spawnSystem = spawnSystem;
         this.processSystem = processSystem;
         this.compoundCloudSystem = compoundCloudSystem;
         this.timedLife = timedLife;
+        this.worldLight = worldLight;
         this.currentGame = currentGame;
     }
 
@@ -40,6 +43,16 @@ public class PatchManager
     {
         if (previousPatch != currentPatch)
         {
+            if (previousPatch != null)
+            {
+                GD.Print("Previous patch (", previousPatch.Name, ") different " +
+                    "to current patch (", currentPatch.Name, ") despawning all entities.");
+            }
+            else
+            {
+                GD.Print("Previous patch doesn't exist, despawning all entities.");
+            }
+
             // Despawn old entities
             spawnSystem.DespawnAll();
 
@@ -70,12 +83,6 @@ public class PatchManager
 
         // Change the lighting
         UpdateLight(currentPatch.Biome);
-
-        // // Changing the background.
-        // ThriveGame::get()->setBackgroundMaterial(biome.background);
-
-        // updateBiomeStatsForGUI(biome);
-        // updateCurrentPatchInfoForGUI(*patch);
     }
 
     private void HandleChunkSpawns(Biome biome)
@@ -128,13 +135,16 @@ public class PatchManager
             var species = entry.Key;
 
             if (species.Population <= 0)
+            {
+                GD.Print(entry.Key.FormattedName, " population <= 0. Skipping Cell Spawn in patch.");
                 continue;
+            }
 
             var density = 1.0f / (Constants.STARTING_SPAWN_DENSITY -
                                 Math.Min(Constants.MAX_SPAWN_DENSITY,
                                     species.Population * 5));
 
-            var name = species.ID.ToString();
+            var name = species.ID.ToString(CultureInfo.InvariantCulture);
 
             HandleSpawnHelper(chunkSpawners, name, density,
                 () =>
@@ -165,56 +175,40 @@ public class PatchManager
         {
             existing.Marked = true;
 
+            float oldFrequency = existing.Spawner.SpawnFrequency;
             existing.Spawner.SetFrequencyFromDensity(density);
+
+            if (oldFrequency != existing.Spawner.SpawnFrequency)
+            {
+                GD.Print("Spawn frequency of ", existing.Name, " changed from ",
+                    oldFrequency, " to ", existing.Spawner.SpawnFrequency);
+            }
         }
         else
         {
             // New spawner needed
             GD.Print("Registering new spawner: Name: ", itemName, " density: ", density);
 
-            chunkSpawners.Add(createNew());
+            existingSpawners.Add(createNew());
         }
     }
 
     private void UpdateLight(Biome biome)
     {
-        // // Sunlight
-        // InWorld.SetLightProperties(biome.sunlightColor, biome.sunlightIntensity,
-        //     biome.sunlightDirection, biome.sunlightSourceRadius);
+        if (biome.Sunlight == null)
+        {
+            GD.PrintErr("biome has no sunlight parameters");
+            return;
+        }
 
-        // // Skybox with indirect light
-        // ThriveGame::get()->setSkybox(biome.skybox, biome.skyboxLightIntensity);
+        worldLight.Translation = new Vector3(0, 0, 0);
+        worldLight.LookAt(biome.Sunlight.Direction, new Vector3(0, 1, 0));
 
-        // // Eye adaptation settings
-        // LOG_INFO("Setting eye adaptation: min: " +
-        //          std::to_string(biome.minEyeAdaptation) +
-        //          " max: " + std::to_string(biome.maxEyeAdaptation));
-        // InWorld.SetAutoExposure(biome.minEyeAdaptation, biome.maxEyeAdaptation);
-    }
+        worldLight.ShadowEnabled = biome.Sunlight.Shadows;
 
-    private void UpdateBiomeStatsForGUI(Biome biome)
-    {
-        // vars->Add(std::make_shared<NamedVariableList>("oxygenPercent",
-        //     new Leviathan::IntBlock(
-        //         cellWorld.GetProcessSystem().getDissolved(oxyId) * 100)));
-
-        // vars->Add(std::make_shared<NamedVariableList>("co2Percent",
-        //     new Leviathan::IntBlock(
-        //         cellWorld.GetProcessSystem().getDissolved(c02Id) * 100)));
-
-        // vars->Add(std::make_shared<NamedVariableList>("n2Percent",
-        //     new Leviathan::IntBlock(
-        //         cellWorld.GetProcessSystem().getDissolved(n2Id) * 100)));
-
-        // vars->Add(std::make_shared<NamedVariableList>("sunlightPercent",
-        //     new Leviathan::IntBlock(
-        //         cellWorld.GetProcessSystem().getDissolved(lightId) * 100)));
-    }
-
-    private void UpdateCurrentPatchInfoForGUI(Patch patch)
-    {
-        // vars->Add(std::make_shared<NamedVariableList>(
-        //     "patchName", new Leviathan::StringBlock(patch.getName())));
+        worldLight.LightColor = biome.Sunlight.Colour;
+        worldLight.LightEnergy = biome.Sunlight.Energy;
+        worldLight.LightSpecular = biome.Sunlight.Specular;
     }
 
     private void UnmarkAllSpawners()
@@ -237,9 +231,23 @@ public class PatchManager
         ClearUnmarkedSingle(microbeSpawners);
     }
 
+    /// <summary>
+    /// Removes unmarked spawners from List.
+    /// </summary>
+    /// <param name="spawners">Spawner list to act upon</param>
     private void ClearUnmarkedSingle(List<CreatedSpawner> spawners)
     {
-        spawners.RemoveAll((item) => item.Marked == false);
+        spawners.RemoveAll((item) =>
+        {
+            if (!item.Marked)
+            {
+                GD.Print("Removed ", item.Name, " spawner.");
+                item.Spawner.DestroyQueued = true;
+                return true;
+            }
+
+            return false;
+        });
     }
 
     private class CreatedSpawner

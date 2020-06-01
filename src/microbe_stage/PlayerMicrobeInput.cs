@@ -11,6 +11,11 @@ public class PlayerMicrobeInput : Node
     /// </summary>
     private MicrobeStage stage;
 
+    /// <summary>
+    ///  Whether or not the player is allowed to use auto-move
+    /// </summary>
+    private bool autoMoveAllowed = true;
+
     // // All the input actions
     private bool forward = false;
     private bool backwards = false;
@@ -26,50 +31,65 @@ public class PlayerMicrobeInput : Node
         stage = (MicrobeStage)GetParent();
     }
 
-    public override void _Input(InputEvent @event)
+    public override void _UnhandledInput(InputEvent @event)
     {
+        var settings = Settings.Instance;
+
+        if (@event.IsActionPressed("g_hold_forward") && autoMoveAllowed)
+        {
+            forward = !forward;
+        }
+
         if (@event.IsActionPressed("g_move_forward"))
         {
             forward = true;
+            autoMoveAllowed = false;
         }
         else if (@event.IsActionReleased("g_move_forward"))
         {
             forward = false;
+            autoMoveAllowed = true;
         }
 
         if (@event.IsActionPressed("g_move_backwards"))
         {
             backwards = true;
+            autoMoveAllowed = false;
         }
         else if (@event.IsActionReleased("g_move_backwards"))
         {
             backwards = false;
+            autoMoveAllowed = true;
         }
 
         if (@event.IsActionPressed("g_move_left"))
         {
             left = true;
+            autoMoveAllowed = false;
         }
         else if (@event.IsActionReleased("g_move_left"))
         {
             left = false;
+            autoMoveAllowed = true;
         }
 
         if (@event.IsActionPressed("g_move_right"))
         {
             right = true;
+            autoMoveAllowed = false;
         }
         else if (@event.IsActionReleased("g_move_right"))
         {
             right = false;
+            autoMoveAllowed = true;
         }
 
-        if (@event.IsActionPressed("g_cheat_editor"))
+        if (settings.CheatsEnabled && @event.IsActionPressed("g_cheat_editor"))
         {
             stage.HUD.ShowReproductionDialog();
         }
 
-        if (@event.IsActionPressed("g_cheat_glucose"))
+        if (settings.CheatsEnabled && @event.IsActionPressed("g_cheat_glucose"))
         {
             cheatGlucose = true;
         }
@@ -78,7 +98,7 @@ public class PlayerMicrobeInput : Node
             cheatGlucose = false;
         }
 
-        if (@event.IsActionPressed("g_cheat_ammonia"))
+        if (settings.CheatsEnabled && @event.IsActionPressed("g_cheat_ammonia"))
         {
             cheatAmmonia = true;
         }
@@ -87,7 +107,7 @@ public class PlayerMicrobeInput : Node
             cheatAmmonia = false;
         }
 
-        if (@event.IsActionPressed("g_cheat_phosphates"))
+        if (settings.CheatsEnabled && @event.IsActionPressed("g_cheat_phosphates"))
         {
             cheatPhosphates = true;
         }

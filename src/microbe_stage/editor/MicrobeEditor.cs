@@ -13,11 +13,7 @@ public class MicrobeEditor : Node
     /// </summary>
     public string NewName;
 
-    /// <summary>
-    ///   Selected colour for the species
-    /// </summary>
-
-    private int symmetry = 0;
+    private MicrobeSymmetry symmetry = MicrobeSymmetry.None;
 
     private MicrobeCamera camera;
     private Node world;
@@ -62,6 +58,7 @@ public class MicrobeEditor : Node
     ///   This is used to keep track of used hover organelles
     /// </summary>
     private int usedHoverHex = 0;
+
     private int usedHoverOrganelle = 0;
 
     /// <summary>
@@ -102,13 +99,33 @@ public class MicrobeEditor : Node
 
     private int organelleRot = 0;
 
-    public MicrobeCamera Camera
+    /// <summary>
+    /// The Symmetry setting of the Microbe Editor.
+    /// </summary>
+    public enum MicrobeSymmetry
     {
-        get
-        {
-            return camera;
-        }
+        /// <summary>
+        /// No symmetry in the editor.
+        /// </summary>
+        None,
+
+        /// <summary>
+        /// Symmetry across the X-Axis in the editor.
+        /// </summary>
+        XAxisSymmetry,
+
+        /// <summary>
+        /// Symmetry across both the X and the Y axis in the editor.
+        /// </summary>
+        FourWaySymmetry,
+
+        /// <summary>
+        /// Symmetry across the X and Y axis, as well as across center, in the editor.
+        /// </summary>
+        SixWaySymmetry,
     }
+
+    public MicrobeCamera Camera => camera;
 
     /// <summary>
     ///   The selected membrane rigidity
@@ -131,14 +148,9 @@ public class MicrobeEditor : Node
     public int MutationPoints { get; private set; }
 
     /// <summary>
-    ///   0 is no symmetry, 1 is x-axis symmetry, 2 is 4-way symmetry, and 3 is 6-way symmetry.
+    ///   The symmetry setting of the microbe editor.
     /// </summary>
-    /// <remarks>
-    ///   <para>
-    ///     TODO: change to enum
-    ///   </para>
-    /// </remarks>
-    public int Symmetry
+    public MicrobeSymmetry Symmetry
     {
         get
         {
@@ -146,9 +158,6 @@ public class MicrobeEditor : Node
         }
         set
         {
-            if (value < 0 || value > 3)
-                throw new ArgumentException("invalid value for symmetry");
-
             symmetry = value;
         }
     }
@@ -193,10 +202,7 @@ public class MicrobeEditor : Node
     /// </summary>
     public int MicrobeSize
     {
-        get
-        {
-            return editedMicrobeOrganelles.Organelles.Count;
-        }
+        get { return editedMicrobeOrganelles.Organelles.Count; }
     }
 
     /// <summary>
@@ -222,10 +228,7 @@ public class MicrobeEditor : Node
     /// </summary>
     public Patch CurrentPatch
     {
-        get
-        {
-            return targetPatch ?? playerPatchOnEntry;
-        }
+        get { return targetPatch ?? playerPatchOnEntry; }
     }
 
     public override void _Ready()
@@ -292,7 +295,7 @@ public class MicrobeEditor : Node
     }
 
     /// <summary>
-    ///   Applies the changes done and exists the editor
+    ///   Applies the changes done and exits the editor
     /// </summary>
     public void OnFinishEditing()
     {
@@ -320,6 +323,8 @@ public class MicrobeEditor : Node
 
         // Update bacteria status
         editedSpecies.IsBacteria = !HasNucleus;
+
+        editedSpecies.UpdateInitialCompounds();
 
         GD.Print("MicrobeEditor: updated organelles for species: ",
             editedSpecies.FormattedName);
@@ -350,6 +355,9 @@ public class MicrobeEditor : Node
         {
             GD.Print("MicrobeEditor: applying player move to patch: ", targetPatch.Name);
             CurrentGame.GameWorld.Map.CurrentPatch = targetPatch;
+
+            // Add the edited species to that patch to allow the species to gain population there
+            CurrentGame.GameWorld.Map.CurrentPatch.AddSpecies(editedSpecies, 0);
         }
 
         var parent = GetParent();
@@ -358,6 +366,11 @@ public class MicrobeEditor : Node
         ReturnToStage.OnReturnFromEditor();
 
         QueueFree();
+    }
+
+    public void ReturnToMenu()
+    {
+        GUICommon.Instance.ReturnToMenu(this);
     }
 
     public void StartMusic()
@@ -420,8 +433,8 @@ public class MicrobeEditor : Node
     /// <summary>
     ///   Calculates the energy balance for a cell with the given organelles
     /// </summary>
-    public void CalculateEnergyBalanceWithOrganellesAndMembraneType(
-        List<OrganelleTemplate> organelles, MembraneType membrane, Patch patch = null)
+    public void CalculateEnergyBalanceWithOrganellesAndMembraneType(List<OrganelleTemplate> organelles,
+        MembraneType membrane, Patch patch = null)
     {
         if (patch == null)
         {
@@ -429,7 +442,7 @@ public class MicrobeEditor : Node
         }
 
         gui.UpdateEnergyBalance(ProcessSystem.ComputeEnergyBalance(organelles.Select((i) => i.Definition), patch.Biome,
-                membrane));
+            membrane));
     }
 
     /// <summary>
@@ -458,60 +471,41 @@ public class MicrobeEditor : Node
         if (!FreeBuilding)
             throw new InvalidOperationException("can't reset cell when not freebuilding");
 
-        // TODO: fix
-        throw new NotImplementedException();
+        var previousMP = MutationPoints;
+        var oldEditedMicrobeOrganelles = new OrganelleLayout<OrganelleTemplate>();
+        var oldMembrane = Membrane;
 
-        // // organelleCount = 0;
-        // var previousMP = mutationPoints;
-        // // Copy current microbe to a new array
-        // array < PlacedOrganelle@> oldEditedMicrobeOrganelles = editedMicrobeOrganelles;
+        foreach (var organelle in editedMicrobeOrganelles)
+        {
+            oldEditedMicrobeOrganelles.Add(organelle);
+        }
 
-        // EditorAction@ action = EditorAction(0,
-        //     // redo
-        //     function(EditorAction@ action, MicrobeEditor@ editor){
-        //     // Delete the organelles (all except the nucleus) and set mutation points
-        //     // (just undoing and redoing the cost like other actions doesn't work in
-        //     // this case due to its nature)
-        //     editor.setMutationPoints(BASE_MUTATION_POINTS);
-        //     for (uint i = editor.editedMicrobeOrganelles.length() - 1; i > 0; --i)
-        //     {
-        //         const PlacedOrganelle@ organelle = editor.editedMicrobeOrganelles[i];
-        //         var hexes = organelle.organelle.getRotatedHexes(organelle.rotation);
-        //         for (uint c = 0; c < hexes.length(); ++c)
-        //         {
-        //             int posQ = int(hexes[c].X) + organelle.q;
-        //             int posR = int(hexes[c].Y) + organelle.r;
-        //             var organelleHere = OrganellePlacement::getOrganelleAt(
-        //                 editor.editedMicrobeOrganelles, Int2(posQ, posR));
-        //             if (organelleHere! is null)
-        //             {
-        //                OrganellePlacement::removeOrganelleAt(editor.editedMicrobeOrganelles,
-        //                     Int2(posQ, posR));
-        //             }
-        //
-        //         }
-        //     }
-        //
-        //     editor._onEditedCellChanged();
-        //
-        // },
-        //     function(EditorAction@ action, MicrobeEditor@ editor){
-        //     editor.editedMicrobeOrganelles.resize(0);
-        //     editor.setMutationPoints(int(action.data["previousMP"]));
-        //     // Load old microbe
-        //     array < PlacedOrganelle@> oldEditedMicrobeOrganelles =
-        //           cast<array<PlacedOrganelle@>> (action.data["oldEditedMicrobeOrganelles"]);
-        //     for (uint i = 0; i < oldEditedMicrobeOrganelles.length(); ++i)
-        //     {
-        //         editor.editedMicrobeOrganelles.insertLast(cast<PlacedOrganelle>(
-        //             oldEditedMicrobeOrganelles[i]));
-        //     }
-        //
-        //     editor._onEditedCellChanged();
-        // });
-        // @action.data["oldEditedMicrobeOrganelles"] = oldEditedMicrobeOrganelles;
-        // action.data["previousMP"] = previousMP;
-        // EnqueueAction(action);
+        var action = new EditorAction(this, 0,
+            redo =>
+            {
+                MutationPoints = Constants.BASE_MUTATION_POINTS;
+                Membrane = SimulationParameters.Instance.GetMembrane("single");
+                editedMicrobeOrganelles.RemoveAll();
+                editedMicrobeOrganelles.Add(new OrganelleTemplate(GetOrganelleDefinition("cytoplasm"),
+                    new Hex(0, 0), 0));
+                gui.UpdateMembraneButtons(Membrane.InternalName);
+                gui.UpdateSpeed(CalculateSpeed());
+            },
+            undo =>
+            {
+                editedMicrobeOrganelles.RemoveAll();
+                MutationPoints = previousMP;
+                Membrane = oldMembrane;
+                gui.UpdateMembraneButtons(Membrane.InternalName);
+                gui.UpdateSpeed(CalculateSpeed());
+
+                foreach (var organelle in oldEditedMicrobeOrganelles)
+                {
+                    editedMicrobeOrganelles.Add(organelle);
+                }
+            });
+
+        EnqueueAction(action);
     }
 
     public void Redo()
@@ -547,49 +541,20 @@ public class MicrobeEditor : Node
             organelleRot = 5;
     }
 
-    public void SetMembrane(Membrane membrane)
+    public void SetMembrane(string membraneName)
     {
+        var membrane = SimulationParameters.Instance.GetMembrane(membraneName);
+
         if (Membrane.Equals(membrane))
             return;
 
-        throw new NotImplementedException();
+        var action = new EditorAction(this, membrane.EditorCost, DoMembraneChangeAction, UndoMembraneChangeAction,
+            new MembraneActionData(Membrane, membrane));
 
-        // int cost = SimulationParameters::membraneRegistry().getTypeData(
-        // string(vars.GetSingleValueByName("membrane"))).editorCost;
+        EnqueueAction(action);
 
-        // EditorAction@ action = EditorAction(cost,
-        //     // redo
-        //     function(EditorAction@ action, MicrobeEditor@ editor){
-        //         editor.membrane = MembraneTypeId(action.data["membrane"]);
-        //         GenericEvent@ event = GenericEvent("MicrobeEditorMembraneUpdated");
-        //         NamedVars@ vars = event.GetNamedVars();
-        //         vars.AddValue(ScriptSafeVariableBlock("membrane",
-        //         SimulationParameters::membraneRegistry().getInternalName(editor.membrane)));
-        //         GetEngine().GetEventHandler().CallEvent(event);
-        //         // Calculate and send energy balance to the GUI
-        //         calculateEnergyBalanceWithOrganellesAndMembraneType(
-        //         editor.editedMicrobeOrganelles, editor.membrane, editor.targetPatch);
-        //         // not using _onEditedCellChange due to visuals not needing update
-        //     },
-        //     // undo
-        //     function(EditorAction@ action, MicrobeEditor@ editor){
-        //         editor.membrane = MembraneTypeId(action.data["prevMembrane"]);
-        //         GenericEvent@ event = GenericEvent("MicrobeEditorMembraneUpdated");
-        //         NamedVars@ vars = event.GetNamedVars();
-        //         vars.AddValue(ScriptSafeVariableBlock("membrane",
-        //         SimulationParameters::membraneRegistry().getInternalName(editor.membrane)));
-        //         GetEngine().GetEventHandler().CallEvent(event);
-        //         // Calculate and send energy balance to the GUI
-        //         calculateEnergyBalanceWithOrganellesAndMembraneType(
-        //         editor.editedMicrobeOrganelles, editor.membrane, editor.targetPatch);
-        //     }
-        // );
-
-        // action.data["membrane"] = SimulationParameters::membraneRegistry().getTypeId(
-        //     string(vars.GetSingleValueByName("membrane")));
-        // action.data["prevMembrane"] = membrane;
-
-        // enqueueAction(action);
+        // In case the action failed, we need to make sure the membrane buttons are updated properly
+        gui.UpdateMembraneButtons(Membrane.InternalName);
     }
 
     public void SetRigidity(float rigidity)
@@ -610,7 +575,7 @@ public class MicrobeEditor : Node
             var newRigidity = rigidity;
             var prevRigidity = Rigidity;
 
-            EditorAction action = new EditorAction(this, cost,
+            var action = new EditorAction(this, cost,
                 redo =>
                 {
                     Rigidity = newRigidity;
@@ -637,84 +602,99 @@ public class MicrobeEditor : Node
 
         switch (Symmetry)
         {
-            case 0:
+            case MicrobeSymmetry.None:
+            {
+                RemoveOrganelleAt(new Hex(q, r));
+                break;
+            }
+
+            case MicrobeSymmetry.XAxisSymmetry:
+            {
+                RemoveOrganelleAt(new Hex(q, r));
+
+                if (q != -1 * q || r != r + q)
                 {
-                    RemoveOrganelleAt(new Hex(q, r));
+                    RemoveOrganelleAt(new Hex(-1 * q, r + q));
                 }
 
                 break;
-            case 1:
-                {
-                    RemoveOrganelleAt(new Hex(q, r));
+            }
 
-                    if (q != -1 * q || r != r + q)
-                    {
-                        RemoveOrganelleAt(new Hex(-1 * q, r + q));
-                    }
+            case MicrobeSymmetry.FourWaySymmetry:
+            {
+                RemoveOrganelleAt(new Hex(q, r));
+
+                if (q != -1 * q || r != r + q)
+                {
+                    RemoveOrganelleAt(new Hex(-1 * q, r + q));
+                    RemoveOrganelleAt(new Hex(-1 * q, -1 * r));
+                    RemoveOrganelleAt(new Hex(q, -1 * (r + q)));
+                }
+                else
+                {
+                    RemoveOrganelleAt(new Hex(-1 * q, -1 * r));
                 }
 
                 break;
-            case 2:
-                {
-                    RemoveOrganelleAt(new Hex(q, r));
+            }
 
-                    if (q != -1 * q || r != r + q)
-                    {
-                        RemoveOrganelleAt(new Hex(-1 * q, r + q));
-                        RemoveOrganelleAt(new Hex(-1 * q, -1 * r));
-                        RemoveOrganelleAt(new Hex(q, -1 * (r + q)));
-                    }
-                }
+            case MicrobeSymmetry.SixWaySymmetry:
+            {
+                RemoveOrganelleAt(new Hex(q, r));
 
-                break;
-            case 3:
-                {
-                    RemoveOrganelleAt(new Hex(q, r));
-
-                    if (q != -1 * q || r != r + q)
-                    {
-                        RemoveOrganelleAt(new Hex(-1 * r, r + q));
-                        RemoveOrganelleAt(new Hex(-1 * (r + q), q));
-                        RemoveOrganelleAt(new Hex(-1 * q, -1 * r));
-                        RemoveOrganelleAt(new Hex(r, -1 * (r + q)));
-                        RemoveOrganelleAt(new Hex(r, -1 * (r + q)));
-                        RemoveOrganelleAt(new Hex(r + q, -1 * q));
-                    }
-                }
+                RemoveOrganelleAt(new Hex(-1 * r, r + q));
+                RemoveOrganelleAt(new Hex(-1 * (r + q), q));
+                RemoveOrganelleAt(new Hex(-1 * q, -1 * r));
+                RemoveOrganelleAt(new Hex(r, -1 * (r + q)));
+                RemoveOrganelleAt(new Hex(r, -1 * (r + q)));
+                RemoveOrganelleAt(new Hex(r + q, -1 * q));
 
                 break;
+            }
         }
     }
 
     public float CalculateSpeed()
     {
-        float finalSpeed = 0;
-        int flagCount = 0;
-        float lengthMicrobe = 0;
+        float microbeMass = Constants.MICROBE_BASE_MASS;
+
+        float baseMovementForce = 0;
+        float organelleMovementForce = 0;
+
+        Vector3 forwardsDirection = new Vector3(0, 0, -1);
 
         foreach (var organelle in editedMicrobeOrganelles.Organelles)
         {
-            lengthMicrobe += organelle.Definition.HexCount;
+            microbeMass += organelle.Definition.Mass;
 
-            // TODO: this should be changed to instead check for the
-            // movement component presence
-            if (organelle.Definition.InternalName == "flagellum")
-                flagCount++;
+            if (organelle.Definition.HasComponentFactory<MovementComponentFactory>())
+            {
+                Vector3 organelleDirection = (Hex.AxialToCartesian(new Hex(0, 0))
+                 - Hex.AxialToCartesian(organelle.Position)).Normalized();
+
+                float directionFactor = organelleDirection.Dot(forwardsDirection);
+
+                // Flagella pointing backwards don't slow you down
+                directionFactor = Math.Max(directionFactor, 0);
+
+                organelleMovementForce += Constants.FLAGELLA_BASE_FORCE
+                    * organelle.Definition.Components.Movement.Momentum / 100.0f
+                    * directionFactor;
+            }
         }
 
-        // This is complex, I know
-        finalSpeed = (Constants.CELL_BASE_THRUST +
-            ((flagCount / (lengthMicrobe - flagCount)) * Constants.FLAGELLA_BASE_FORCE) +
-            (Constants.CELL_DRAG_MULTIPLIER -
-                (Constants.CELL_SIZE_DRAG_MULTIPLIER * lengthMicrobe))) *
-            (Membrane.MovementFactor -
-            (Rigidity * Constants.MEMBRANE_RIGIDITY_MOBILITY_MODIFIER));
+        baseMovementForce = Constants.CELL_BASE_THRUST *
+            (Membrane.MovementFactor - Rigidity * Constants.MEMBRANE_RIGIDITY_MOBILITY_MODIFIER);
+
+        float finalSpeed = (baseMovementForce + organelleMovementForce) / microbeMass;
+
         return finalSpeed;
     }
 
     /// <summary>
     ///   Returns true when the player is allowed to move to the specified patch
     /// </summary>
+    /// <returns>True if the patch move requested is valid. False otherwise</returns>
     public bool IsPatchMoveValid(Patch patch)
     {
         if (patch == null)
@@ -864,6 +844,7 @@ public class MicrobeEditor : Node
         // bar can take it into account (the bar is updated when
         // organelles are added)
         Membrane = species.MembraneType;
+        Rigidity = species.MembraneRigidity;
 
         // Get the species organelles to be edited. This also updates the placeholder hexes
         foreach (var organelle in species.Organelles.Organelles)
@@ -887,7 +868,6 @@ public class MicrobeEditor : Node
         }
 
         NewName = species.FormattedName;
-        Rigidity = species.MembraneRigidity;
 
         gui.SetSpeciesInfo(NewName, Membrane, species.Colour, Rigidity);
 
@@ -912,6 +892,8 @@ public class MicrobeEditor : Node
 
     private void UpdateEditor(float delta)
     {
+        _ = delta;
+
         // We move all the hexes and the hover hexes to 0,0,0 so that
         // the editor is free to replace them wherever
         // TODO: it would be way better if we didn't have to do this and instead only updated
@@ -947,32 +929,43 @@ public class MicrobeEditor : Node
 
             // Can place stuff at all?
             isPlacementProbablyValid = IsValidPlacement(new OrganelleTemplate(
-                    GetOrganelleDefinition(ActiveActionName), new Hex(q, r), organelleRot));
+                GetOrganelleDefinition(ActiveActionName), new Hex(q, r), organelleRot));
 
             switch (Symmetry)
             {
-                case 0:
-                    RenderHighlightedOrganelle(1, q, r, organelleRot);
+                case MicrobeSymmetry.None:
+                {
+                    RenderHighlightedOrganelle(q, r, organelleRot);
                     break;
-                case 1:
-                    RenderHighlightedOrganelle(1, q, r, organelleRot);
-                    RenderHighlightedOrganelle(2, -1 * q, r + q, 6 + (-1 * organelleRot));
+                }
+
+                case MicrobeSymmetry.XAxisSymmetry:
+                {
+                    RenderHighlightedOrganelle(q, r, organelleRot);
+                    RenderHighlightedOrganelle(-1 * q, r + q, 6 + (-1 * organelleRot));
                     break;
-                case 2:
-                    RenderHighlightedOrganelle(1, q, r, organelleRot);
-                    RenderHighlightedOrganelle(2, -1 * q, r + q, 6 + (-1 * organelleRot));
-                    RenderHighlightedOrganelle(3, -1 * q, -1 * r, (organelleRot + 180) % 6);
-                    RenderHighlightedOrganelle(4, q, -1 * (r + q),
+                }
+
+                case MicrobeSymmetry.FourWaySymmetry:
+                {
+                    RenderHighlightedOrganelle(q, r, organelleRot);
+                    RenderHighlightedOrganelle(-1 * q, r + q, 6 + (-1 * organelleRot));
+                    RenderHighlightedOrganelle(-1 * q, -1 * r, (organelleRot + 180) % 6);
+                    RenderHighlightedOrganelle(q, -1 * (r + q),
                         8 + (-1 * organelleRot) % 6);
                     break;
-                case 3:
-                    RenderHighlightedOrganelle(1, q, r, organelleRot);
-                    RenderHighlightedOrganelle(2, -1 * r, r + q, (organelleRot + 1) % 6);
-                    RenderHighlightedOrganelle(3, -1 * (r + q), q, (organelleRot + 2) % 6);
-                    RenderHighlightedOrganelle(4, -1 * q, -1 * r, (organelleRot + 3) % 6);
-                    RenderHighlightedOrganelle(5, r, -1 * (r + q), (organelleRot + 4) % 6);
-                    RenderHighlightedOrganelle(6, r + q, -1 * q, (organelleRot + 5) % 6);
+                }
+
+                case MicrobeSymmetry.SixWaySymmetry:
+                {
+                    RenderHighlightedOrganelle(q, r, organelleRot);
+                    RenderHighlightedOrganelle(-1 * r, r + q, (organelleRot + 1) % 6);
+                    RenderHighlightedOrganelle(-1 * (r + q), q, (organelleRot + 2) % 6);
+                    RenderHighlightedOrganelle(-1 * q, -1 * r, (organelleRot + 3) % 6);
+                    RenderHighlightedOrganelle(r, -1 * (r + q), (organelleRot + 4) % 6);
+                    RenderHighlightedOrganelle(r + q, -1 * q, (organelleRot + 5) % 6);
                     break;
+                }
             }
         }
     }
@@ -980,7 +973,7 @@ public class MicrobeEditor : Node
     /// <summary>
     ///   If not hovering over an organelle, render the to-be-placed organelle
     /// </summary>
-    private void RenderHighlightedOrganelle(int unused, int q, int r, int rotation)
+    private void RenderHighlightedOrganelle(int q, int r, int rotation)
     {
         if (ActiveActionName == null)
             return;
@@ -1034,7 +1027,7 @@ public class MicrobeEditor : Node
         }
 
         // Model
-        if (toBePlacedOrganelle.DisplayScene != string.Empty && showModel)
+        if (!string.IsNullOrEmpty(toBePlacedOrganelle.DisplayScene) && showModel)
         {
             var cartesianPosition = Hex.AxialToCartesian(new Hex(q, r));
 
@@ -1092,10 +1085,14 @@ public class MicrobeEditor : Node
 
         switch (Symmetry)
         {
-            case 0:
+            case MicrobeSymmetry.None:
+            {
                 PlaceIfPossible(organelleType, q, r, organelleRot);
                 break;
-            case 1:
+            }
+
+            case MicrobeSymmetry.XAxisSymmetry:
+            {
                 PlaceIfPossible(organelleType, q, r, organelleRot);
 
                 if (q != -1 * q || r != r + q)
@@ -1104,39 +1101,45 @@ public class MicrobeEditor : Node
                 }
 
                 break;
-            case 2:
-                {
-                    PlaceIfPossible(organelleType, q, r, organelleRot);
+            }
 
-                    if (q != -1 * q || r != r + q)
-                    {
-                        PlaceIfPossible(organelleType, -1 * q, r + q, 6 + (-1 * organelleRot));
-                        PlaceIfPossible(organelleType, -1 * q, -1 * r, (organelleRot + 3) % 6);
-                        PlaceIfPossible(organelleType, q, -1 * (r + q),
-                            (8 + (-1 * organelleRot)) % 6);
-                    }
+            case MicrobeSymmetry.FourWaySymmetry:
+            {
+                PlaceIfPossible(organelleType, q, r, organelleRot);
+
+                if (q != -1 * q || r != r + q)
+                {
+                    PlaceIfPossible(organelleType, -1 * q, r + q, 6 + (-1 * organelleRot));
+                    PlaceIfPossible(organelleType, -1 * q, -1 * r, (organelleRot + 3) % 6);
+                    PlaceIfPossible(organelleType, q, -1 * (r + q), (8 + (-1 * organelleRot)) % 6);
+                }
+                else
+                {
+                    PlaceIfPossible(organelleType, -1 * q, -1 * r, (organelleRot + 3) % 6);
                 }
 
                 break;
-            case 3:
-                {
-                    PlaceIfPossible(organelleType, q, r, organelleRot);
+            }
 
-                    if (q != -1 * q || r != r + q)
-                    {
-                        PlaceIfPossible(organelleType, -1 * r, r + q, (organelleRot + 1) % 6);
-                        PlaceIfPossible(organelleType, -1 * (r + q), q,
-                            (organelleRot + 2) % 6);
-                        PlaceIfPossible(organelleType, -1 * q, -1 * r, (organelleRot + 3) % 6);
-                        PlaceIfPossible(organelleType, r, -1 * (r + q),
-                            (organelleRot + 4) % 6);
-                        PlaceIfPossible(organelleType, r + q, -1 * q, (organelleRot + 5) % 6);
-                    }
-                }
+            case MicrobeSymmetry.SixWaySymmetry:
+            {
+                PlaceIfPossible(organelleType, q, r, organelleRot);
+
+                PlaceIfPossible(organelleType, -1 * r, r + q, (organelleRot + 1) % 6);
+                PlaceIfPossible(organelleType, -1 * (r + q), q,
+                    (organelleRot + 2) % 6);
+                PlaceIfPossible(organelleType, -1 * q, -1 * r, (organelleRot + 3) % 6);
+                PlaceIfPossible(organelleType, r, -1 * (r + q),
+                    (organelleRot + 4) % 6);
+                PlaceIfPossible(organelleType, r + q, -1 * q, (organelleRot + 5) % 6);
 
                 break;
+            }
+
             default:
+            {
                 throw new Exception("unimplemented symmetry in AddOrganelle");
+            }
         }
     }
 
@@ -1146,7 +1149,7 @@ public class MicrobeEditor : Node
     private void PlaceIfPossible(string organelleType, int q, int r, int rotation)
     {
         var organelle = new OrganelleTemplate(GetOrganelleDefinition(organelleType),
-            new Hex(q, r), organelleRot);
+            new Hex(q, r), rotation);
 
         if (!IsValidPlacement(organelle))
             return;
@@ -1222,8 +1225,8 @@ public class MicrobeEditor : Node
         // 1 - you put nucleus but you already have it
         // 2 - you put organelle that need nucleus and you don't have it
         if ((organelle.Definition.Name == "nucleus" && HasNucleus) ||
-            ((organelle.Definition.ProkaryoteChance == 0 && !HasNucleus)
-            && organelle.Definition.ChanceToCreate != 0))
+            (organelle.Definition.ProkaryoteChance == 0 && !HasNucleus
+                && organelle.Definition.ChanceToCreate != 0))
             return;
 
         var action = new EditorAction(this, organelle.Definition.MPCost,
@@ -1373,6 +1376,29 @@ public class MicrobeEditor : Node
         organelleModel.Scene = displayScene;
     }
 
+    private void DoMembraneChangeAction(EditorAction action)
+    {
+        var data = (MembraneActionData)action.Data;
+        var membrane = data.NewMembrane;
+        GD.Print("Changing membrane to '", membrane.InternalName, "'");
+        Membrane = membrane;
+        gui.UpdateMembraneButtons(Membrane.InternalName);
+        gui.UpdateSpeed(CalculateSpeed());
+        CalculateEnergyBalanceWithOrganellesAndMembraneType(
+            editedMicrobeOrganelles.Organelles, Membrane, targetPatch);
+    }
+
+    private void UndoMembraneChangeAction(EditorAction action)
+    {
+        var data = (MembraneActionData)action.Data;
+        Membrane = data.OldMembrane;
+        GD.Print("Changing membrane back to '", Membrane.InternalName, "'");
+        gui.UpdateMembraneButtons(Membrane.InternalName);
+        gui.UpdateSpeed(CalculateSpeed());
+        CalculateEnergyBalanceWithOrganellesAndMembraneType(
+            editedMicrobeOrganelles.Organelles, Membrane, targetPatch);
+    }
+
     /// <summary>
     ///   Perform all actions through this to make undo and redo work
     /// </summary>
@@ -1408,10 +1434,20 @@ public class MicrobeEditor : Node
 
         // Get summary before applying results in order to get comparisons to the previous populations
         var run = CurrentGame.GameWorld.GetAutoEvoRun();
-        var summary = run.Results.MakeSummary(CurrentGame.GameWorld.Map, true, run.ExternalEffects);
-        var external = run.MakeSummaryOfExternalEffects();
 
-        gui.UpdateAutoEvoResults(summary, external);
+        if (run?.Results == null)
+        {
+            gui.UpdateAutoEvoResults("Auto-evo failed to run", "run status: " +
+                (run != null ? run.Status : string.Empty));
+        }
+        else
+        {
+            var summary = run.Results.MakeSummary(CurrentGame.GameWorld.Map, true,
+                run.ExternalEffects);
+            var external = run.MakeSummaryOfExternalEffects();
+
+            gui.UpdateAutoEvoResults(summary, external);
+        }
 
         ApplyAutoEvoResults();
     }
@@ -1496,6 +1532,18 @@ public class MicrobeEditor : Node
         public RemoveActionData(OrganelleTemplate organelle)
         {
             Organelle = organelle;
+        }
+    }
+
+    private class MembraneActionData
+    {
+        public MembraneType OldMembrane;
+        public MembraneType NewMembrane;
+
+        public MembraneActionData(MembraneType oldMembrane, MembraneType newMembrane)
+        {
+            OldMembrane = oldMembrane;
+            NewMembrane = newMembrane;
         }
     }
 }

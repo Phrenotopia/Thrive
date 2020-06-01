@@ -169,7 +169,7 @@ public class GameWorld
 
     public AutoEvoRun GetAutoEvoRun()
     {
-        IsAutoEvoFinished(true);
+        IsAutoEvoFinished();
 
         return autoEvo;
     }
@@ -189,13 +189,16 @@ public class GameWorld
     /// <summary>
     ///   Adds an external population effect to a species
     /// </summary>
+    /// <param name="species">Target species</param>
+    /// <param name="amount">Change amount</param>
+    /// <param name="description">What caused the change</param>
     /// <param name="immediate">
     ///   If true applied immediately. Should only be used for the player dying
     /// </param>
-    public void AlterSpeciesPopulation(Species species, int amount, string description,
-        bool immediate = false)
+    public void AlterSpeciesPopulation(Species species, int constant, string description,
+        bool immediate = false, float coefficient = 1)
     {
-        if (amount == 0)
+        if (constant == 0 || coefficient == 0)
             return;
 
         if (species == null)
@@ -209,12 +212,12 @@ public class GameWorld
 
             GD.Print("Applying immediate population effect " +
                 "(should only be used for the player dying)");
-            species.ApplyImmediatePopulationChange(amount);
+            species.ApplyImmediatePopulationChange(constant, coefficient);
         }
 
         CreateRunIfMissing();
 
-        autoEvo.AddExternalPopulationEffect(species, amount, description);
+        autoEvo.AddExternalPopulationEffect(species, constant, coefficient, description);
     }
 
     private void CreateRunIfMissing()

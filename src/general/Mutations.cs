@@ -10,18 +10,20 @@ using Godot;
 public class Mutations
 {
     private static readonly List<string> Vowels = new List<string>()
-        {
+    {
         "a", "e", "i", "o", "u",
-        };
+    };
+
     private static readonly List<string> PronoucablePermutation = new List<string>()
-        {
+    {
         "th", "sh", "ch", "wh", "Th", "Sh", "Ch", "Wh",
-        };
+    };
+
     private static readonly List<string> Consonants = new List<string>()
-        {
+    {
         "b", "c", "d", "f", "g", "h", "j", "k", "l", "m",
         "n", "p", "q", "s", "t", "v", "w", "x", "y", "z",
-        };
+    };
 
     private Random random = new Random();
 
@@ -30,6 +32,11 @@ public class Mutations
     /// </summary>
     public MicrobeSpecies CreateMutatedSpecies(MicrobeSpecies parent, MicrobeSpecies mutated)
     {
+        if (parent.Organelles.Count < 1)
+        {
+            throw new ArgumentException("Can't create a mutated version of an empty species");
+        }
+
         var simulation = SimulationParameters.Instance;
         var nameGenerator = simulation.NameGenerator;
 
@@ -72,8 +79,7 @@ public class Mutations
             mutated.IsBacteria = false;
         }
 
-        var colour = mutated.IsBacteria ? RandomProkayroteColour() :
-            RandomColour();
+        var colour = mutated.IsBacteria ? RandomProkayroteColour() : RandomColour();
 
         if (random.Next(0, 101) <= 20)
         {
@@ -114,27 +120,12 @@ public class Mutations
             mutated.MembraneType = parent.MembraneType;
         }
 
+        mutated.Colour = colour;
+
         mutated.MembraneRigidity = Math.Max(Math.Min(parent.MembraneRigidity +
-                random.Next(-25, 26) / 100.0f, 1), -1);
+            random.Next(-25, 26) / 100.0f, 1), -1);
 
-        // If you have iron (f is the symbol for rusticyanin)
-        var rusticyanin = simulation.GetOrganelleType("rusticyanin");
-        var chemo = simulation.GetOrganelleType("chemoplast");
-        var chemoProtein = simulation.GetOrganelleType("chemoSynthesizingProteins");
-
-        if (mutated.Organelles.Any(o => o.Definition == rusticyanin))
-        {
-            mutated.SetInitialCompoundsForIron();
-        }
-        else if (mutated.Organelles.Any(o => o.Definition == chemo ||
-                o.Definition == chemoProtein))
-        {
-            mutated.SetInitialCompoundsForChemo();
-        }
-        else
-        {
-            mutated.SetInitialCompoundsForDefault();
-        }
+        mutated.UpdateInitialCompounds();
 
         return mutated;
     }
@@ -283,6 +274,17 @@ public class Mutations
                 AddNewOrganelle(organelles, nucleus);
             }
         }
+
+        // Disallow creating empty species as that throws an exception when trying to spawn
+        if (organelles.Count < 1)
+        {
+            // Add the first parent species organelle
+            AddNewOrganelle(organelles, parentOrganelles[0].Definition);
+
+            // If still empty, copy the first organelle of the parent
+            if (organelles.Count < 1)
+                organelles.Add((OrganelleTemplate)parentOrganelles[0].Clone());
+        }
     }
 
     /// <summary>
@@ -334,7 +336,7 @@ public class Mutations
                 for (int side = 1; side <= 6; ++side)
                 {
                     // Offset by hex offset
-                    result.Position = pos + Hex.HexNeighbourOffset[(Hex.HEX_SIDE)side];
+                    result.Position = pos + Hex.HexNeighbourOffset[(Hex.HexSide)side];
 
                     // TODO: checking one or two extra hexes in the direction would make this succeed more often
 
@@ -430,7 +432,6 @@ public class Mutations
                 // Are we a vowel or are we a consonant?
                 var part = newName.ToString(index, 2);
                 bool isPermute = PronoucablePermutation.Any(item => item == part);
-                string original = newName.ToString(index, 2);
                 if (random.Next(0, 21) <= 10 && isPermute)
                 {
                     newName.Erase(index, 2);

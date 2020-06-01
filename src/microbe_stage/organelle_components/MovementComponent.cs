@@ -1,5 +1,4 @@
-﻿using System;
-using Godot;
+﻿using Godot;
 
 /// <summary>
 ///   Flagellum for making cells move faster
@@ -11,6 +10,8 @@ public class MovementComponent : ExternallyPositionedComponent
 
     private bool movingTail = false;
     private Vector3 force;
+
+    private AnimationPlayer animation;
 
     public MovementComponent(float momentum, float torque)
     {
@@ -25,9 +26,8 @@ public class MovementComponent : ExternallyPositionedComponent
 
         // Movement force
         var microbe = organelle.ParentMicrobe;
-        var pos = microbe.Translation;
 
-        var movement = CalculateMovementForce(microbe, elapsed, pos);
+        var movement = CalculateMovementForce(microbe, elapsed);
 
         if (movement != new Vector3(0, 0, 0))
             microbe.AddMovementForce(movement);
@@ -37,14 +37,14 @@ public class MovementComponent : ExternallyPositionedComponent
     {
         force = CalculateForce(organelle.Position, Momentum);
 
-        // TODO: animation
-        // SimpleAnimation moveAnimation("flagellum_move.animation");
-        // moveAnimation.Loop = true;
-        // // 0.25 is the "idle" animation speed when the flagellum isn't used
-        // moveAnimation.SpeedFactor = 0.25f;
-        // animated.AddAnimation(moveAnimation);
-        // // Don't forget to mark to apply the new animation
-        // animated.Marked = true;
+        animation = organelle.OrganelleAnimation;
+
+        if (animation == null)
+        {
+            GD.PrintErr("MovementComponent's organelle has no animation player set");
+        }
+
+        SetSpeedFactor(0.25f);
     }
 
     protected override void OnPositionChanged(Quat rotation, float angle,
@@ -67,28 +67,26 @@ public class MovementComponent : ExternallyPositionedComponent
 
     private void SetSpeedFactor(float speed)
     {
-        // TODO: fix flagellum animation
-        // if(animated !is null){
-        //     if(animated.GetAnimation(0).SpeedFactor != speed){
-        //         animated.GetAnimation(0).SpeedFactor = speed;
-        //         animated.Marked = true;
-        //     }
-        // }
+        if (animation != null)
+        {
+            animation.PlaybackSpeed = speed;
+        }
     }
 
+    // ReSharper disable once UnusedParameter.Local
     /// <summary>
     ///   The final calculated force is multiplied by elapsed before
     ///   applying. So we don't have to do that. But we need to take
     ///   the right amount of atp.
     /// </summary>
-    private Vector3 CalculateMovementForce(Microbe microbe, float elapsed, Vector3 position)
+    private Vector3 CalculateMovementForce(Microbe microbe, float elapsed)
     {
         // The movementDirection is the player or AI input
         Vector3 direction = microbe.MovementDirection;
 
-        var forceMagnitude = this.force.Dot(direction);
+        var forceMagnitude = force.Dot(direction);
         if (forceMagnitude <= 0 || direction.LengthSquared() < MathUtils.EPSILON ||
-            this.force.LengthSquared() < MathUtils.EPSILON)
+            force.LengthSquared() < MathUtils.EPSILON)
         {
             if (movingTail)
             {
@@ -100,27 +98,30 @@ public class MovementComponent : ExternallyPositionedComponent
             return new Vector3(0, 0, 0);
         }
 
-        // TODO: make only one speedfactor call per update (currently 2 might be made)
+        var animationSpeed = 2.3f;
         movingTail = true;
-        SetSpeedFactor(2.3f);
 
-        var energy = Constants.FLAGELLA_ENERGY_COST * elapsed;
+        var requiredEnergy = Constants.FLAGELLA_ENERGY_COST * elapsed;
 
-        var availableEnergy = microbe.Compounds.TakeCompound("atp", energy);
+        var availableEnergy = microbe.Compounds.TakeCompound("atp", requiredEnergy);
 
-        if (availableEnergy <= 0.0f)
+        if (availableEnergy < requiredEnergy)
         {
-            forceMagnitude = Math.Sign(forceMagnitude) * availableEnergy * 20.0f;
-            movingTail = false;
+            // Not enough energy, scale the force down
+            var fraction = availableEnergy / requiredEnergy;
 
-            SetSpeedFactor(0.25f);
+            forceMagnitude *= fraction;
+
+            animationSpeed = 0.25f + (animationSpeed - 0.25f) * fraction;
         }
 
-        float impulseMagnitude = (Constants.FLAGELLA_BASE_FORCE * microbe.MovementFactor *
-            forceMagnitude) / 100.0f;
+        float impulseMagnitude = Constants.FLAGELLA_BASE_FORCE * microbe.MovementFactor *
+            forceMagnitude / 100.0f;
 
         // Rotate the 'thrust' based on our orientation
         direction = microbe.Transform.basis.Xform(direction);
+
+        SetSpeedFactor(animationSpeed);
 
         return direction * impulseMagnitude;
     }
@@ -140,13 +141,13 @@ public class MovementComponentFactory : IOrganelleComponentFactory
     {
         if (Momentum <= 0.0f)
         {
-            throw new InvalidRegistryData(name, this.GetType().Name,
+            throw new InvalidRegistryDataException(name, GetType().Name,
                 "Momentum needs to be > 0.0f");
         }
 
         if (Torque <= 0.0f)
         {
-            throw new InvalidRegistryData(name, this.GetType().Name,
+            throw new InvalidRegistryDataException(name, GetType().Name,
                 "Torque needs to be > 0.0f");
         }
     }

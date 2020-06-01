@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Godot;
 
@@ -10,12 +9,23 @@ public class FloatingChunk : RigidBody, ISpawned
     [Export]
     public PackedScene GraphicsScene;
 
+    /// <summary>
+    ///   The node path to the mesh of this chunk
+    /// </summary>
+    public string ModelNodePath;
+
     private CompoundCloudSystem compoundClouds;
 
     /// <summary>
     ///   Used to check if a microbe wants to engulf this
     /// </summary>
     private HashSet<Microbe> touchingMicrobes = new HashSet<Microbe>();
+
+    private MeshInstance chunkMesh;
+
+    private bool isDissolving = false;
+
+    private float dissolveEffectValue = 0.0f;
 
     public int DespawnRadiusSqr { get; set; }
 
@@ -45,7 +55,7 @@ public class FloatingChunk : RigidBody, ISpawned
     /// <summary>
     ///   If true this chunk is destroyed when all compounds are vented
     /// </summary>
-    public bool Disolves { get; set; } = false;
+    public bool Dissolves { get; set; } = false;
 
     /// <summary>
     ///   If > 0 applies damage to a cell on touch
@@ -65,18 +75,21 @@ public class FloatingChunk : RigidBody, ISpawned
     ///     Doesn't initialize the graphics scene which needs to be set separately
     ///   </para>
     /// </remarks>
-    public void Init(Biome.ChunkConfiguration chunkType, CompoundCloudSystem compoundClouds)
+    public void Init(Biome.ChunkConfiguration chunkType, CompoundCloudSystem compoundClouds,
+        string modelPath = null)
     {
         this.compoundClouds = compoundClouds;
 
         // Grab data
         VentPerSecond = chunkType.VentAmount;
-        Disolves = chunkType.Dissolves;
+        Dissolves = chunkType.Dissolves;
         Size = chunkType.Size;
         Damages = chunkType.Damages;
         DeleteOnTouch = chunkType.DeleteOnTouch;
 
         Mass = chunkType.Mass;
+
+        ModelNodePath = modelPath;
 
         // Apply physics shape
         var shape = GetNode<CollisionShape>("CollisionShape");
@@ -120,13 +133,26 @@ public class FloatingChunk : RigidBody, ISpawned
             return;
         }
 
-        AddChild(GraphicsScene.Instance());
+        var graphicsNode = GraphicsScene.Instance();
+        GetNode("NodeToScale").AddChild(graphicsNode);
+
+        if (string.IsNullOrEmpty(ModelNodePath))
+        {
+            chunkMesh = (MeshInstance)graphicsNode;
+        }
+        else
+        {
+            chunkMesh = graphicsNode.GetNode<MeshInstance>(ModelNodePath);
+        }
     }
 
     public override void _Process(float delta)
     {
         if (ContainedCompounds != null)
             VentCompounds(delta);
+
+        if (isDissolving)
+            HandleDissolving(delta);
 
         // Check contacts
         foreach (var microbe in touchingMicrobes)
@@ -138,16 +164,14 @@ public class FloatingChunk : RigidBody, ISpawned
             // Damage
             if (Damages > 0)
             {
-                float totalDamage = Damages * delta;
-
                 // TODO: Not the cleanest way to play the damage sound
                 if (DeleteOnTouch)
                 {
-                    microbe.Damage(totalDamage, "toxin");
+                    microbe.Damage(Damages, "toxin");
                 }
                 else
                 {
-                    microbe.Damage(totalDamage, "chunk");
+                    microbe.Damage(Damages * delta, "chunk");
                 }
             }
 
@@ -177,7 +201,7 @@ public class FloatingChunk : RigidBody, ISpawned
 
             if (DeleteOnTouch || disappear)
             {
-                QueueFree();
+                isDissolving = true;
                 break;
             }
         }
@@ -212,9 +236,9 @@ public class FloatingChunk : RigidBody, ISpawned
 
         // If you did not vent anything this step and the venter component
         // is flagged to dissolve you, dissolve you
-        if (!vented && Disolves)
+        if (!vented && Dissolves)
         {
-            QueueFree();
+            isDissolving = true;
         }
     }
 
@@ -224,8 +248,32 @@ public class FloatingChunk : RigidBody, ISpawned
             compound, amount * Constants.CHUNK_VENT_COMPOUND_MULTIPLIER, pos);
     }
 
+    /// <summary>
+    ///   Handles the dissolving effect for the chunks when they run out of compounds.
+    /// </summary>
+    private void HandleDissolving(float delta)
+    {
+        // Disable collisions
+        CollisionLayer = 0;
+        CollisionMask = 0;
+
+        var material = (ShaderMaterial)chunkMesh.MaterialOverride;
+
+        dissolveEffectValue += delta * Constants.FLOATING_CHUNKS_DISSOLVE_SPEED;
+
+        material.SetShaderParam("dissolveValue", dissolveEffectValue);
+
+        if (dissolveEffectValue >= 1)
+        {
+            QueueFree();
+        }
+    }
+
     private void OnContactBegin(int bodyID, Node body, int bodyShape, int localShape)
     {
+        _ = bodyID;
+        _ = localShape;
+
         if (body is Microbe microbe)
         {
             // Can't engulf with a pilus
@@ -238,6 +286,9 @@ public class FloatingChunk : RigidBody, ISpawned
 
     private void OnContactEnd(int bodyID, Node body, int bodyShape, int localShape)
     {
+        _ = bodyID;
+        _ = localShape;
+
         if (body is Microbe microbe)
         {
             // This might help in a case where the cell is touching with both a pilus and non-pilus part

@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 /// </summary>
 public class Settings
 {
-    private static readonly Settings INSTANCE = LoadSettings();
+    private static readonly Settings SingletonInstance = LoadSettings();
 
     static Settings()
     {
@@ -17,13 +17,42 @@ public class Settings
     {
     }
 
-    public static Settings Instance
-    {
-        get
-        {
-            return INSTANCE;
-        }
-    }
+    public static Settings Instance => SingletonInstance;
+
+    /// <summary>
+    ///   If true all sounds are muted
+    /// </summary>
+    public bool VolumeMasterMuted { get; set; } = false;
+
+    /// <summary>
+    ///   The Db value to be added to the master audio bus
+    /// </summary>
+    public float VolumeMaster { get; set; } = 0.0f;
+
+    /// <summary>
+    ///   If true music is muted
+    /// </summary>
+    public bool VolumeMusicMuted { get; set; } = false;
+
+    /// <summary>
+    ///   The Db value to be added to the music audio bus
+    /// </summary>
+    public float VolumeMusic { get; set; } = 0.0f;
+
+    /// <summary>
+    ///   If true tell godot to be in fullscreen mode
+    /// </summary>
+    public bool FullScreen { get; set; } = true;
+
+    /// <summary>
+    ///   If true tell godot to use vsync
+    /// </summary>
+    public bool VSync { get; set; } = true;
+
+    /// <summary>
+    ///   When true cheats are enabled
+    /// </summary>
+    public bool CheatsEnabled { get; set; } = false;
 
     /// <summary>
     ///   When true the main intro is played
@@ -44,8 +73,7 @@ public class Settings
     /// <summary>
     ///   This can be freely adjusted to adjust the performance The
     ///   higher this value is the smaller the size of the simulated
-    ///   cloud is and the performance is better. Don't change this to
-    ///   be higher than 1.
+    ///   cloud is and the performance is better.
     /// </summary>
     public int CloudResolution { get; set; } = 2;
 
@@ -63,21 +91,20 @@ public class Settings
     /// </remarks>
     public float CloudUpdateInterval { get; set; } = 0.040f;
 
-    public int CloudSimulationWidth
-    {
-        get
-        {
-            return (int)(Constants.CLOUD_X_EXTENT / CloudResolution);
-        }
-    }
+    /// <summary>
+    ///   Sets amount of MSAA to apply to the viewport
+    /// </summary>
+    public Viewport.MSAA MSAAResolution { get; set; } = Viewport.MSAA.Disabled;
 
-    public int CloudSimulationHeight
-    {
-        get
-        {
-            return (int)(Constants.CLOUD_Y_EXTENT / CloudResolution);
-        }
-    }
+    /// <summary>
+    ///   Choose what filter to apply to the screen
+    ///   0 = None, 1 = Red/Green, 2 = Blue/Yellow
+    /// </summary>
+    public int ColourblindSetting { get; set; } = 0;
+
+    public int CloudSimulationWidth => Constants.CLOUD_X_EXTENT / CloudResolution;
+
+    public int CloudSimulationHeight => Constants.CLOUD_Y_EXTENT / CloudResolution;
 
     /// <summary>
     ///   Saves the current settings by writing them to the settings file
@@ -102,7 +129,63 @@ public class Settings
         }
     }
 
+    /// <summary>
+    ///   Applies all the general settings
+    /// </summary>
+    public void ApplyAll()
+    {
+        ApplySoundLevels();
+        ApplyWindowSettings();
+        ApplyGraphicsSettings();
+    }
+
+    /// <summary>
+    ///   Applies the sound volume and mute settings on the audio bus
+    /// </summary>
+    public void ApplySoundLevels()
+    {
+        var master = AudioServer.GetBusIndex("Master");
+
+        AudioServer.SetBusVolumeDb(master, VolumeMaster);
+        AudioServer.SetBusMute(master, VolumeMasterMuted);
+
+        var music = AudioServer.GetBusIndex("Music");
+
+        AudioServer.SetBusVolumeDb(music, VolumeMusic);
+        AudioServer.SetBusMute(music, VolumeMusicMuted);
+    }
+
+    public void ApplyWindowSettings()
+    {
+        OS.WindowFullscreen = FullScreen;
+        OS.VsyncEnabled = VSync;
+    }
+
+    public void ApplyGraphicsSettings()
+    {
+        GUICommon.Instance.GetTree().Root.GetViewport().Msaa = MSAAResolution;
+        ScreenFilter.Instance.SetColourblindSetting(ColourblindSetting);
+    }
+
+    /// <summary>
+    ///   Reset all options to default values
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        // var defaults = new Settings();
+
+        // TODO: apply the default values
+        throw new NotImplementedException();
+    }
+
     private static Settings LoadSettings()
+    {
+        var settings = LoadSettingsFileOrDefault();
+        settings.ApplyAll();
+        return settings;
+    }
+
+    private static Settings LoadSettingsFileOrDefault()
     {
         using (var file = new File())
         {

@@ -23,9 +23,13 @@ public class Membrane : MeshInstance
     private float wigglyNess = 1.0f;
     private float movementWigglyNess = 1.0f;
     private Color tint = new Color(1, 1, 1, 1);
+    private float dissolveEffectValue = 0.0f;
 
     private Texture normalTexture;
     private Texture damagedTexture;
+    private Texture noiseTexture;
+
+    private string currentlyLoadedNormalTexture;
 
     private bool dirty = true;
     private bool radiusIsDirty = true;
@@ -133,12 +137,9 @@ public class Membrane : MeshInstance
         {
             // Desaturate it here so it looks nicer (could implement as method that
             // could be called i suppose)
-            float saturation;
-            float brightness;
-            float hue;
 
             // According to stack overflow HSV and HSB are the same thing
-            value.ToHsv(out hue, out saturation, out brightness);
+            value.ToHsv(out var hue, out var saturation, out var brightness);
 
             value = Color.FromHsv(hue, saturation * 0.75f, brightness);
 
@@ -167,6 +168,20 @@ public class Membrane : MeshInstance
             }
 
             return cachedRadius;
+        }
+    }
+
+    public float DissolveEffectValue
+    {
+        get
+        {
+            return dissolveEffectValue;
+        }
+        set
+        {
+            dissolveEffectValue = value;
+            if (MaterialToEdit != null)
+                ApplyDissolveEffect();
         }
     }
 
@@ -208,9 +223,9 @@ public class Membrane : MeshInstance
                 (vertices2D[i + 1].y <= y && y < vertices2D[i].y))
             {
                 if (x < (vertices2D[i + 1].x - vertices2D[i].x) *
-                               (y - vertices2D[i].y) /
-                               (vertices2D[i + 1].y - vertices2D[i].y) +
-                           vertices2D[i].x)
+                    (y - vertices2D[i].y) /
+                    (vertices2D[i + 1].y - vertices2D[i].y) +
+                    vertices2D[i].x)
                 {
                     crosses = !crosses;
                 }
@@ -287,7 +302,7 @@ public class Membrane : MeshInstance
     /// </summary>
     private static Vector2 GetMovement(Vector2 target, Vector2 closestOrganelle)
     {
-        float power = Mathf.Pow(2.7f, (-(target - closestOrganelle).Length()) / 10) / 50;
+        float power = Mathf.Pow(2.7f, -(target - closestOrganelle).Length() / 10) / 50;
 
         return (closestOrganelle - target) * power;
     }
@@ -340,6 +355,7 @@ public class Membrane : MeshInstance
         ApplyHealth();
         ApplyTint();
         ApplyTextures();
+        ApplyDissolveEffect();
     }
 
     private void ApplyWiggly()
@@ -364,15 +380,26 @@ public class Membrane : MeshInstance
 
     private void ApplyTextures()
     {
-        if (normalTexture != null)
+        // We must update the texture on already-existing membranes,
+        // due to the membrane texture changing for the player microbe.
+        if (normalTexture != null && currentlyLoadedNormalTexture == Type.NormalTexture)
             return;
 
-        // TODO: add the loaded Texture objects to be in the membrane type
-        normalTexture = GD.Load<Texture>(Type.NormalTexture);
-        damagedTexture = GD.Load<Texture>(Type.DamagedTexture);
+        normalTexture = Type.LoadedNormalTexture;
+        damagedTexture = Type.LoadedDamagedTexture;
+
+        noiseTexture = GD.Load<Texture>("res://assets/textures/dissolve_noise.tres");
 
         MaterialToEdit.SetShaderParam("albedoTexture", normalTexture);
         MaterialToEdit.SetShaderParam("damagedTexture", damagedTexture);
+        MaterialToEdit.SetShaderParam("dissolveTexture", noiseTexture);
+
+        currentlyLoadedNormalTexture = Type.NormalTexture;
+    }
+
+    private void ApplyDissolveEffect()
+    {
+        MaterialToEdit.SetShaderParam("dissolveValue", DissolveEffectValue);
     }
 
     /// <summary>
@@ -380,6 +407,12 @@ public class Membrane : MeshInstance
     /// </summary>
     private void InitializeMesh()
     {
+        // For preview scenes, add just one organelle
+        if (OrganellePositions == null)
+        {
+            OrganellePositions = new List<Vector2>() { new Vector2(0, 0) };
+        }
+
         foreach (var pos in OrganellePositions)
         {
             if (Mathf.Abs(pos.x) + 1 > cellDimensions)
@@ -398,27 +431,27 @@ public class Membrane : MeshInstance
         for (int i = membraneResolution; i > 0; i--)
         {
             vertices2D.Add(new Vector2(-cellDimensions,
-                    cellDimensions - 2 * cellDimensions / membraneResolution * i));
+                cellDimensions - 2 * cellDimensions / membraneResolution * i));
         }
 
         for (int i = membraneResolution; i > 0; i--)
         {
             vertices2D.Add(new Vector2(
-                    cellDimensions - 2 * cellDimensions / membraneResolution * i,
-                    cellDimensions));
+                cellDimensions - 2 * cellDimensions / membraneResolution * i,
+                cellDimensions));
         }
 
         for (int i = membraneResolution; i > 0; i--)
         {
             vertices2D.Add(new Vector2(cellDimensions,
-                    -cellDimensions + 2 * cellDimensions / membraneResolution * i));
+                -cellDimensions + 2 * cellDimensions / membraneResolution * i));
         }
 
         for (int i = membraneResolution; i > 0; i--)
         {
             vertices2D.Add(new Vector2(
-                    -cellDimensions + 2 * cellDimensions / membraneResolution * i,
-                    -cellDimensions));
+                -cellDimensions + 2 * cellDimensions / membraneResolution * i,
+                -cellDimensions));
         }
 
         // This needs to actually run a bunch of times as the points
@@ -501,7 +534,7 @@ public class Membrane : MeshInstance
         float multiplier = 2.0f * Mathf.Pi;
         var center = new Vector2(0.5f, 0.5f);
 
-        // cell walls need obvious inner/outer memrbranes (we can worry
+        // cell walls need obvious inner/outer membranes (we can worry
         // about chitin later)
         if (Type.CellWall)
         {
@@ -524,7 +557,7 @@ public class Membrane : MeshInstance
                 vertices2D[i % end].y);
 
             uvs[writeIndex] = center +
-                (new Vector2(Mathf.Cos(currentRadians), Mathf.Sin(currentRadians)) / 2);
+                new Vector2(Mathf.Cos(currentRadians), Mathf.Sin(currentRadians)) / 2;
 
             ++writeIndex;
         }
@@ -576,7 +609,7 @@ public class Membrane : MeshInstance
             // Check to see if the gap between two points in the membrane is too
             // big.
             if ((newPositions[i] - newPositions[(i + 1) % newPositions.Count])
-                .Length() > cellDimensions / membraneResolution)
+                .Length() > (float)cellDimensions / membraneResolution)
             {
                 // Add an element after the ith term that is the average of the
                 // i and i+1 term.
@@ -592,8 +625,8 @@ public class Membrane : MeshInstance
             // Check to see if the gap between two points in the membrane is too
             // small.
             if ((newPositions[(i + 1) % newPositions.Count] -
-                   newPositions[(i + newPositions.Count - 1) % newPositions.Count])
-                .Length() < cellDimensions / membraneResolution)
+                    newPositions[(i + newPositions.Count - 1) % newPositions.Count])
+                .Length() < (float)cellDimensions / membraneResolution)
             {
                 // Delete the ith term.
                 newPositions.RemoveAt(i);

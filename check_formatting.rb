@@ -7,6 +7,7 @@ require 'digest'
 
 require_relative 'bootstrap_rubysetupsystem'
 require_relative 'RubySetupSystem/RubyCommon'
+require_relative 'scripts/fast_build/toggle_analysis_lib'
 
 MAX_LINE_LENGTH = 120
 
@@ -125,7 +126,7 @@ def handle_file(path)
     handle_gd_file path
   elsif path =~ /\.cs$/
     handle_cs_file path
-  elsif path =~ %r{scripts/.*\.json$}
+  elsif path =~ %r{simulation_parameters/.*\.json$}
     handle_json_file path
   else
     false
@@ -135,6 +136,9 @@ end
 # Run functions for the specific checks
 
 def run_compile
+  # Make sure in analysis mode before running build
+  perform_analysis_mode_check true, quiet: true
+
   status, output = runOpen3CaptureOutput('msbuild', 'Thrive.sln', '/t:Clean,Build',
                                          '/warnaserror')
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using Godot;
 
@@ -10,120 +11,194 @@ public class MicrobeEditorGUI : Node
 {
     // The labels to update are at really long relative paths, so they are set in the Godot editor
     [Export]
+    public NodePath MenuPath;
+
+    [Export]
     public NodePath SizeLabelPath;
+
     [Export]
     public NodePath SpeedLabelPath;
+
     [Export]
     public NodePath GenerationLabelPath;
+
     [Export]
     public NodePath MutationPointsLabelPath;
+
     [Export]
     public NodePath MutationPointsBarPath;
+
     [Export]
     public NodePath SpeciesNameEditPath;
+
     [Export]
     public NodePath MembraneColorPickerPath;
+
+    [Export]
+    public NodePath NewCellButtonPath;
+
     [Export]
     public NodePath UndoButtonPath;
+
     [Export]
     public NodePath RedoButtonPath;
+
+    [Export]
+    public NodePath FinishButtonPath;
+
     [Export]
     public NodePath SymmetryButtonPath;
+
     [Export]
     public NodePath ATPBalanceLabelPath;
+
     [Export]
     public NodePath ATPProductionBarPath;
+
     [Export]
     public NodePath ATPConsumptionBarPath;
+
     [Export]
     public NodePath ATPProductionLabelPath;
+
     [Export]
     public NodePath ATPConsumptionLabelPath;
+
     [Export]
     public NodePath GlucoseReductionLabelPath;
+
     [Export]
     public NodePath AutoEvoLabelPath;
+
     [Export]
     public NodePath ExternalEffectsLabelPath;
+
     [Export]
     public NodePath MapDrawerPath;
+
     [Export]
     public NodePath PatchNothingSelectedPath;
+
     [Export]
     public NodePath PatchDetailsPath;
+
     [Export]
     public NodePath PatchNamePath;
+
     [Export]
     public NodePath PatchPlayerHerePath;
+
     [Export]
     public NodePath PatchBiomePath;
+
     [Export]
     public NodePath PatchTemperaturePath;
+
     [Export]
     public NodePath PatchPressurePath;
+
     [Export]
     public NodePath PatchLightPath;
+
     [Export]
     public NodePath PatchOxygenPath;
+
     [Export]
     public NodePath PatchNitrogenPath;
+
     [Export]
     public NodePath PatchCO2Path;
+
     [Export]
     public NodePath PatchHydrogenSulfidePath;
+
     [Export]
     public NodePath PatchAmmoniaPath;
+
     [Export]
     public NodePath PatchGlucosePath;
+
     [Export]
     public NodePath PatchPhosphatePath;
+
     [Export]
     public NodePath PatchIronPath;
+
     [Export]
     public NodePath SpeciesListPath;
+
     [Export]
     public NodePath PhysicalConditionsButtonPath;
+
     [Export]
     public NodePath PhysicalConditionsBoxPath;
+
     [Export]
     public NodePath AtmosphericConditionsButtonPath;
+
     [Export]
     public NodePath AtmosphericConditionsBoxPath;
+
     [Export]
     public NodePath CompoundsBoxButtonPath;
+
     [Export]
     public NodePath CompoundsBoxPath;
+
     [Export]
     public NodePath SpeciesListButtonPath;
+
     [Export]
     public NodePath MoveToPatchButtonPath;
+
     [Export]
     public NodePath PatchTemperatureSituationPath;
+
     [Export]
     public NodePath PatchLightSituationPath;
+
     [Export]
     public NodePath PatchHydrogenSulfideSituationPath;
+
     [Export]
     public NodePath PatchGlucoseSituationPath;
+
     [Export]
     public NodePath PatchIronSituationPath;
+
     [Export]
     public NodePath PatchAmmoniaSituationPath;
+
     [Export]
     public NodePath PatchPhosphateSituationPath;
+
     [Export]
     public NodePath RigiditySliderPath;
 
     [Export]
+    public NodePath RigiditySliderTooltipHealthLabelPath;
+
+    [Export]
+    public NodePath RigiditySliderTooltipSpeedLabelPath;
+
+    [Export]
+    public NodePath HelpScreenPath;
+
+    [Export]
     public NodePath SymmetryIconPath;
+
     [Export]
     public Texture SymmetryIcon2x;
+
     [Export]
     public Texture SymmetryIcon4x;
+
     [Export]
     public Texture SymmetryIcon6x;
+
     [Export]
     public Texture IncreaseIcon;
+
     [Export]
     public Texture DecreaseIcon;
 
@@ -136,6 +211,7 @@ public class MicrobeEditorGUI : Node
     private Godot.Collections.Array membraneSelectionElements;
     private Godot.Collections.Array itemTooltipElements;
 
+    private Control menu;
     private Label sizeLabel;
     private Label speedLabel;
     private Label generationLabel;
@@ -143,8 +219,10 @@ public class MicrobeEditorGUI : Node
     private TextureProgress mutationPointsBar;
     private LineEdit speciesNameEdit;
     private ColorPicker membraneColorPicker;
+    private TextureButton newCellButton;
     private TextureButton undoButton;
     private TextureButton redoButton;
+    private Button finishButton;
     private TextureButton symmetryButton;
     private TextureRect symmetryIcon;
     private Label atpBalanceLabel;
@@ -189,9 +267,15 @@ public class MicrobeEditorGUI : Node
     private TextureRect patchAmmoniaSituation;
     private TextureRect patchPhosphateSituation;
     private Slider rigiditySlider;
+    private HelpScreen helpScreen;
 
     private bool inEditorTab = false;
-    private int symmetry = 0;
+    private MicrobeEditor.MicrobeSymmetry symmetry = MicrobeEditor.MicrobeSymmetry.None;
+
+    /// <summary>
+    ///   For toggling purposes
+    /// </summary>
+    private bool speciesListIsHidden = false;
 
     public string GetNewSpeciesName()
     {
@@ -211,6 +295,7 @@ public class MicrobeEditorGUI : Node
 
         loadingScreen = GetNode<LoadingScreen>("LoadingScreen");
 
+        menu = GetNode<Control>(MenuPath);
         sizeLabel = GetNode<Label>(SizeLabelPath);
         speedLabel = GetNode<Label>(SpeedLabelPath);
         generationLabel = GetNode<Label>(GenerationLabelPath);
@@ -218,9 +303,11 @@ public class MicrobeEditorGUI : Node
         mutationPointsBar = GetNode<TextureProgress>(MutationPointsBarPath);
         speciesNameEdit = GetNode<LineEdit>(SpeciesNameEditPath);
         membraneColorPicker = GetNode<ColorPicker>(MembraneColorPickerPath);
+        newCellButton = GetNode<TextureButton>(NewCellButtonPath);
         undoButton = GetNode<TextureButton>(UndoButtonPath);
         redoButton = GetNode<TextureButton>(RedoButtonPath);
         symmetryButton = GetNode<TextureButton>(SymmetryButtonPath);
+        finishButton = GetNode<Button>(FinishButtonPath);
         atpBalanceLabel = GetNode<Label>(ATPBalanceLabelPath);
         atpProductionBar = GetNode<ProgressBar>(ATPProductionBarPath);
         atpConsumptionBar = GetNode<ProgressBar>(ATPConsumptionBarPath);
@@ -264,11 +351,9 @@ public class MicrobeEditorGUI : Node
         patchAmmoniaSituation = GetNode<TextureRect>(PatchAmmoniaSituationPath);
         patchPhosphateSituation = GetNode<TextureRect>(PatchPhosphateSituationPath);
         rigiditySlider = GetNode<Slider>(RigiditySliderPath);
+        helpScreen = GetNode<HelpScreen>(HelpScreenPath);
 
-        mapDrawer.OnSelectedPatchChanged = (drawer) =>
-        {
-            UpdateShownPatchDetails();
-        };
+        mapDrawer.OnSelectedPatchChanged = (drawer) => { UpdateShownPatchDetails(); };
 
         // Fade out for that smooth satisfying transition
         TransitionManager.Instance.AddScreenFade(Fade.FadeType.FadeOut, 0.5f);
@@ -280,6 +365,9 @@ public class MicrobeEditorGUI : Node
         if (@event.IsActionPressed("ui_cancel"))
         {
             MenuButtonPressed();
+
+            if (helpScreen.Visible)
+                helpScreen.Hide();
         }
     }
 
@@ -293,8 +381,7 @@ public class MicrobeEditorGUI : Node
         // Update mutation points
         mutationPointsBar.MaxValue = Constants.BASE_MUTATION_POINTS;
         mutationPointsBar.Value = editor.MutationPoints;
-        mutationPointsLabel.Text = string.Format("{0:F0} / {1:F0}", editor.MutationPoints,
-            Constants.BASE_MUTATION_POINTS);
+        mutationPointsLabel.Text = $"{editor.MutationPoints:F0} / {Constants.BASE_MUTATION_POINTS:F0}";
     }
 
     public void SetMap(PatchMap map)
@@ -327,17 +414,17 @@ public class MicrobeEditorGUI : Node
 
     public void UpdateSize(int size)
     {
-        sizeLabel.Text = "Size " + size.ToString();
+        sizeLabel.Text = "Size " + size.ToString(CultureInfo.CurrentCulture);
     }
 
     public void UpdateGeneration(int generation)
     {
-        generationLabel.Text = "Generation " + generation.ToString();
+        generationLabel.Text = "Generation " + generation.ToString(CultureInfo.CurrentCulture);
     }
 
     public void UpdateSpeed(float speed)
     {
-        speedLabel.Text = "Speed " + string.Format("{0:F1}", speed);
+        speedLabel.Text = "Speed " + string.Format(CultureInfo.CurrentCulture, "{0:F1}", speed);
     }
 
     public void UpdateEnergyBalance(EnergyBalanceInfo energyBalance)
@@ -361,16 +448,16 @@ public class MicrobeEditorGUI : Node
         atpConsumptionBar.MaxValue = maxValue;
         atpConsumptionBar.Value = energyBalance.TotalConsumption;
 
-        var atpProductionBarProgressLength = (float)((atpProductionBar.RectSize.x * atpProductionBar.Value) /
+        var atpProductionBarProgressLength = (float)(atpProductionBar.RectSize.x * atpProductionBar.Value /
             atpProductionBar.MaxValue);
-        var atpConsumptionBarProgressLength = (float)((atpConsumptionBar.RectSize.x * atpConsumptionBar.Value) /
+        var atpConsumptionBarProgressLength = (float)(atpConsumptionBar.RectSize.x * atpConsumptionBar.Value /
             atpConsumptionBar.MaxValue);
 
         atpProductionLabel.RectSize = new Vector2(atpProductionBarProgressLength, 18);
         atpConsumptionLabel.RectSize = new Vector2(atpConsumptionBarProgressLength, 18);
 
-        atpProductionLabel.Text = string.Format("{0:F1}", energyBalance.TotalProduction);
-        atpConsumptionLabel.Text = string.Format("{0:F1}", energyBalance.TotalConsumption);
+        atpProductionLabel.Text = string.Format(CultureInfo.CurrentCulture, "{0:F1}", energyBalance.TotalProduction);
+        atpConsumptionLabel.Text = string.Format(CultureInfo.CurrentCulture, "{0:F1}", energyBalance.TotalConsumption);
     }
 
     /// <summary>
@@ -390,6 +477,41 @@ public class MicrobeEditorGUI : Node
                         processList);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    ///   Updates the fluidity / rigidity slider tooltip
+    /// </summary>
+    public void SetRigiditySliderTooltip(float rigidity)
+    {
+        var healthChangeLabel = GetNode<Label>(RigiditySliderTooltipHealthLabelPath);
+        var mobilityChangeLabel = GetNode<Label>(RigiditySliderTooltipSpeedLabelPath);
+
+        float healthChange = rigidity * Constants.MEMBRANE_RIGIDITY_HITPOINTS_MODIFIER;
+        float mobilityChange = -1 * rigidity * Constants.MEMBRANE_RIGIDITY_MOBILITY_MODIFIER;
+
+        healthChangeLabel.Text = ((healthChange > 0) ? "+" : string.Empty)
+            + healthChange.ToString(CultureInfo.CurrentCulture);
+        mobilityChangeLabel.Text = ((mobilityChange > 0) ? "+" : string.Empty)
+            + mobilityChange.ToString(CultureInfo.CurrentCulture);
+
+        if (healthChange >= 0)
+        {
+            healthChangeLabel.AddColorOverride("font_color", new Color(0, 1, 0));
+        }
+        else
+        {
+            healthChangeLabel.AddColorOverride("font_color", new Color(1, 0.3f, 0.3f));
+        }
+
+        if (mobilityChange >= 0)
+        {
+            mobilityChangeLabel.AddColorOverride("font_color", new Color(0, 1, 0));
+        }
+        else
+        {
+            mobilityChangeLabel.AddColorOverride("font_color", new Color(1, 0.3f, 0.3f));
         }
     }
 
@@ -420,11 +542,11 @@ public class MicrobeEditorGUI : Node
 
     /// <summary>
     ///   Called when the mouse is no longer hovering
-    //    the editor GUI.
+    ///   the editor GUI.
     /// </summary>
     internal void OnMouseExit()
     {
-        editor.ShowHover = true && inEditorTab;
+        editor.ShowHover = inEditorTab;
     }
 
     internal void OnItemMouseHover(string itemName)
@@ -458,14 +580,44 @@ public class MicrobeEditorGUI : Node
         redoButton.Disabled = !enabled;
     }
 
-    internal void NotifyFreebuild(object freebuilding)
+    internal void NotifyFreebuild(bool freebuilding)
     {
-        // TODO: fix
-        // throw new NotImplementedException();
+        if (freebuilding)
+        {
+            newCellButton.Disabled = false;
+        }
+        else
+        {
+            newCellButton.Disabled = true;
+        }
+    }
+
+    internal void OnNewCellClicked()
+    {
+        GUICommon.Instance.PlayButtonPressSound();
+
+        editor.CreateNewMicrobe();
+    }
+
+    internal void ToggleHelpScreen()
+    {
+        GUICommon.Instance.PlayButtonPressSound();
+
+        if (!helpScreen.Visible)
+        {
+            menu.Hide();
+            helpScreen.Show();
+            helpScreen.RandomizeEasterEgg();
+        }
+        else
+        {
+            helpScreen.Hide();
+            menu.Show();
+        }
     }
 
     /// <summary>
-    ///   lock / unlock the organelles  that need a nuclues
+    ///   Lock / unlock the organelles  that need a nuclues
     /// </summary>
     /// <remarks>
     ///   <para>
@@ -509,7 +661,7 @@ public class MicrobeEditorGUI : Node
                     organelleItem.Disabled = true;
                 }
             }
-            else if (hasNucleus)
+            else
             {
                 if (organelleItem.Name == "nucleus")
                 {
@@ -571,6 +723,9 @@ public class MicrobeEditorGUI : Node
 
     internal void OnFinishEditingClicked()
     {
+        // To prevent being clicked twice
+        finishButton.MouseFilter = Control.MouseFilterEnum.Ignore;
+
         TransitionManager.Instance.AddScreenFade(Fade.FadeType.FadeIn, 0.3f, false);
         TransitionManager.Instance.StartTransitions(editor, nameof(MicrobeEditor.OnFinishEditing));
     }
@@ -579,24 +734,24 @@ public class MicrobeEditorGUI : Node
     {
         GUICommon.Instance.PlayButtonPressSound();
 
-        if (symmetry == 3)
+        if (symmetry == MicrobeEditor.MicrobeSymmetry.SixWaySymmetry)
         {
             ResetSymmetryButton();
         }
-        else if (symmetry == 0)
+        else if (symmetry == MicrobeEditor.MicrobeSymmetry.None)
         {
             symmetryIcon.Texture = SymmetryIcon2x;
-            symmetry = 1;
+            symmetry = MicrobeEditor.MicrobeSymmetry.XAxisSymmetry;
         }
-        else if (symmetry == 1)
+        else if (symmetry == MicrobeEditor.MicrobeSymmetry.XAxisSymmetry)
         {
             symmetryIcon.Texture = SymmetryIcon4x;
-            symmetry = 2;
+            symmetry = MicrobeEditor.MicrobeSymmetry.FourWaySymmetry;
         }
-        else if (symmetry == 2)
+        else if (symmetry == MicrobeEditor.MicrobeSymmetry.FourWaySymmetry)
         {
             symmetryIcon.Texture = SymmetryIcon6x;
-            symmetry = 3;
+            symmetry = MicrobeEditor.MicrobeSymmetry.SixWaySymmetry;
         }
 
         editor.Symmetry = symmetry;
@@ -610,11 +765,32 @@ public class MicrobeEditorGUI : Node
 
     internal void OnMembraneSelected(string membrane)
     {
-        // todo: Send selected membrane to the editor script
+        editor.SetMembrane(membrane);
+    }
 
+    internal void SetSpeciesInfo(string name, MembraneType membrane, Color colour,
+        float rigidity)
+    {
+        speciesNameEdit.Text = name;
+        membraneColorPicker.Color = colour;
+
+        // Callback is manually called because the function isn't called automatically here
+        OnSpeciesNameTextChanged(name);
+
+        UpdateMembraneButtons(membrane.InternalName);
+
+        UpdateRigiditySlider(rigidity, editor.MutationPoints);
+    }
+
+    internal void UpdateMembraneButtons(string membrane)
+    {
         // Updates the GUI buttons based on current membrane
         foreach (Button element in membraneSelectionElements)
         {
+            // This is required so that the button press state won't be
+            // updated incorrectly when we don't have enough MP to change the membrane
+            element.Pressed = false;
+
             var selectedLabel = element.GetNode<Label>(
                 "MarginContainer/VBoxContainer/SelectedLabelMargin/SelectedLabel");
 
@@ -632,21 +808,6 @@ public class MicrobeEditorGUI : Node
         }
     }
 
-    internal void SetSpeciesInfo(string name, MembraneType membrane, Color colour,
-        float rigidity)
-    {
-        // TODO: fix
-        // throw new NotImplementedException();
-
-        speciesNameEdit.Text = name;
-        membraneColorPicker.Color = colour;
-
-        // Callback is manually called because the function isn't called automatically here
-        OnSpeciesNameTextChanged(name);
-
-        UpdateRigiditySlider(rigidity, editor.MutationPoints);
-    }
-
     internal void UpdateRigiditySlider(float value, int mutationPoints)
     {
         if (mutationPoints > 0)
@@ -659,6 +820,7 @@ public class MicrobeEditorGUI : Node
         }
 
         rigiditySlider.Value = value;
+        SetRigiditySliderTooltip(value);
     }
 
     private void OnRigidityChanged(float value)
@@ -745,9 +907,10 @@ public class MicrobeEditorGUI : Node
         }
     }
 
-    private void OnConditionClicked(string tab)
+    private void ToggleConditionsTab(string tab)
     {
-        // I couldn't make these slide
+        var slideAnimations = patchDetails.GetNode<AnimationPlayer>("SlideAnimations");
+
         if (tab == "physical")
         {
             var minusButton = physicalConditionsButton.GetNode<TextureButton>("minusButton");
@@ -755,80 +918,88 @@ public class MicrobeEditorGUI : Node
 
             if (!physicalConditionsBox.Visible)
             {
-                physicalConditionsBox.Show();
+                slideAnimations.Play("physicalSlideDown");
                 minusButton.Show();
                 plusButton.Hide();
             }
             else
             {
-                physicalConditionsBox.Hide();
+                slideAnimations.Play("physicalSlideUp");
                 minusButton.Hide();
                 plusButton.Show();
             }
         }
-
-        if (tab == "atmospheric")
+        else if (tab == "atmospheric")
         {
             var minusButton = atmosphericConditionsButton.GetNode<TextureButton>("minusButton");
             var plusButton = atmosphericConditionsButton.GetNode<TextureButton>("plusButton");
 
             if (!atmosphericConditionsBox.Visible)
             {
-                atmosphericConditionsBox.Show();
+                slideAnimations.Play("atmosphericSlideDown");
                 minusButton.Show();
                 plusButton.Hide();
             }
             else
             {
-                atmosphericConditionsBox.Hide();
+                slideAnimations.Play("atmosphericSlideUp");
                 minusButton.Hide();
                 plusButton.Show();
             }
         }
-
-        if (tab == "compounds")
+        else if (tab == "compounds")
         {
             var minusButton = compoundsButton.GetNode<TextureButton>("minusButton");
             var plusButton = compoundsButton.GetNode<TextureButton>("plusButton");
 
             if (!compoundsBox.Visible)
             {
-                compoundsBox.Show();
+                slideAnimations.Play("compoundsSlideDown");
                 minusButton.Show();
                 plusButton.Hide();
             }
             else
             {
-                compoundsBox.Hide();
+                slideAnimations.Play("compoundsSlideUp");
                 minusButton.Hide();
                 plusButton.Show();
             }
         }
-
-        if (tab == "species")
+        else if (tab == "species")
         {
             var minusButton = speciesListButton.GetNode<TextureButton>("minusButton");
             var plusButton = speciesListButton.GetNode<TextureButton>("plusButton");
 
-            if (!speciesList.Visible)
+            var clip = speciesList.GetParent<MarginContainer>();
+            var tween = clip.GetNode<Tween>("Tween");
+
+            if (speciesListIsHidden)
             {
-                speciesList.Show();
+                tween.InterpolateProperty(clip, "custom_constants/margin_top", -speciesList.RectSize.y, 20, 0.3f,
+                    Tween.TransitionType.Sine, Tween.EaseType.Out);
+                tween.Start();
+
                 minusButton.Show();
                 plusButton.Hide();
+
+                speciesListIsHidden = false;
             }
             else
             {
-                speciesList.Hide();
+                tween.InterpolateProperty(clip, "custom_constants/margin_top", 20, -speciesList.RectSize.y, 0.3f,
+                    Tween.TransitionType.Sine, Tween.EaseType.Out);
+                tween.Start();
+
                 minusButton.Hide();
                 plusButton.Show();
+
+                speciesListIsHidden = true;
             }
         }
     }
 
     private void MenuButtonPressed()
     {
-        var menu = GetNode<Control>("PauseMenu");
-
         if (menu.Visible)
         {
             menu.Hide();
@@ -843,24 +1014,20 @@ public class MicrobeEditorGUI : Node
         GUICommon.Instance.PlayButtonPressSound();
     }
 
+    private void ReturnToMenuPressed()
+    {
+        // Unpause the game as well as close the pause menu
+        MenuButtonPressed();
+        GetTree().Paused = false;
+
+        TransitionManager.Instance.AddScreenFade(Fade.FadeType.FadeIn, 0.3f, false);
+        TransitionManager.Instance.StartTransitions(editor, nameof(MicrobeEditor.ReturnToMenu));
+    }
+
     private void ExitPressed()
     {
         GUICommon.Instance.PlayButtonPressSound();
         GetTree().Quit();
-    }
-
-    private TextureRect CreateCompoundIcon(string compoundName)
-    {
-        var element = new TextureRect();
-        element.Expand = true;
-        element.RectMinSize = new Vector2(20, 20);
-
-        var icon = GD.Load<Texture>("res://assets/textures/gui/bevel/" + compoundName.ReplaceN(
-            " ", string.Empty) + ".png");
-
-        element.Texture = icon;
-
-        return element;
     }
 
     private void WriteOrganelleProcessList(List<ProcessSpeedInformation> processList,
@@ -914,9 +1081,9 @@ public class MicrobeEditorGUI : Node
                     var inputCompound = process.OtherInputs[key];
 
                     var amountLabel = new Label();
-                    amountLabel.Text = Math.Round(inputCompound.Amount, 2) + " ";
+                    amountLabel.Text = Math.Round(inputCompound.Amount, 3) + " ";
                     processBody.AddChild(amountLabel);
-                    processBody.AddChild(CreateCompoundIcon(inputCompound.Compound.Name));
+                    processBody.AddChild(GUICommon.Instance.CreateCompoundIcon(inputCompound.Compound.Name));
                 }
 
                 // And the arrow
@@ -936,17 +1103,24 @@ public class MicrobeEditorGUI : Node
 
                 var stringBuilder = new StringBuilder(string.Empty, 150);
 
+                // Changes process title and process# to red if process has 0 output
+                if (outputCompound.Amount == 0)
+                {
+                    processTitle.AddColorOverride("font_color", new Color(1.0f, 0.1f, 0.1f));
+                    amountLabel.AddColorOverride("font_color", new Color(1.0f, 0.1f, 0.1f));
+                }
+
                 if (usePlus)
                 {
                     stringBuilder.Append(outputCompound.Amount >= 0 ? "+" : string.Empty);
                 }
 
-                stringBuilder.Append(Math.Round(outputCompound.Amount, 2) + " ");
+                stringBuilder.Append(Math.Round(outputCompound.Amount, 3) + " ");
 
                 amountLabel.Text = stringBuilder.ToString();
 
                 processBody.AddChild(amountLabel);
-                processBody.AddChild(CreateCompoundIcon(outputCompound.Compound.Name));
+                processBody.AddChild(GUICommon.Instance.CreateCompoundIcon(outputCompound.Compound.Name));
             }
 
             var perSecondLabel = new Label();
@@ -958,7 +1132,6 @@ public class MicrobeEditorGUI : Node
             if (process.EnvironmentInputs.Count > 0)
             {
                 var atSymbol = new Label();
-                var separator = new HSeparator();
 
                 atSymbol.Text = "@";
                 atSymbol.RectMinSize = new Vector2(30, 20);
@@ -987,7 +1160,7 @@ public class MicrobeEditorGUI : Node
                     percentageLabel.Text = Math.Round(environmentCompound.AvailableAmount * 100, 1) + "%";
 
                     processBody.AddChild(percentageLabel);
-                    processBody.AddChild(CreateCompoundIcon(environmentCompound.Compound.Name));
+                    processBody.AddChild(GUICommon.Instance.CreateCompoundIcon(environmentCompound.Compound.Name));
                 }
             }
 
@@ -1034,17 +1207,17 @@ public class MicrobeEditorGUI : Node
 
         nextCompound = selectedPatch.Biome.Compounds["hydrogensulfide"].Density *
             selectedPatch.Biome.Compounds["hydrogensulfide"].Amount + GetPatchChunkTotalCompoundAmount(
-            selectedPatch, "hydrogensulfide");
+                selectedPatch, "hydrogensulfide");
 
         if (nextCompound > currentPatch.Biome.Compounds["hydrogensulfide"].Density *
             currentPatch.Biome.Compounds["hydrogensulfide"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "hydrogensulfide"))
+                currentPatch, "hydrogensulfide"))
         {
             patchHydrogenSulfideSituation.Texture = IncreaseIcon;
         }
         else if (nextCompound < currentPatch.Biome.Compounds["hydrogensulfide"].Density *
             currentPatch.Biome.Compounds["hydrogensulfide"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "hydrogensulfide"))
+                currentPatch, "hydrogensulfide"))
         {
             patchHydrogenSulfideSituation.Texture = DecreaseIcon;
         }
@@ -1055,17 +1228,17 @@ public class MicrobeEditorGUI : Node
 
         nextCompound = selectedPatch.Biome.Compounds["glucose"].Density *
             selectedPatch.Biome.Compounds["glucose"].Amount + GetPatchChunkTotalCompoundAmount(
-            selectedPatch, "glucose");
+                selectedPatch, "glucose");
 
         if (nextCompound > currentPatch.Biome.Compounds["glucose"].Density *
             currentPatch.Biome.Compounds["glucose"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "glucose"))
+                currentPatch, "glucose"))
         {
             patchGlucoseSituation.Texture = IncreaseIcon;
         }
         else if (nextCompound < currentPatch.Biome.Compounds["glucose"].Density *
             currentPatch.Biome.Compounds["glucose"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "glucose"))
+                currentPatch, "glucose"))
         {
             patchGlucoseSituation.Texture = DecreaseIcon;
         }
@@ -1091,17 +1264,17 @@ public class MicrobeEditorGUI : Node
 
         nextCompound = selectedPatch.Biome.Compounds["ammonia"].Density *
             selectedPatch.Biome.Compounds["ammonia"].Amount + GetPatchChunkTotalCompoundAmount(
-            selectedPatch, "ammonia");
+                selectedPatch, "ammonia");
 
         if (nextCompound > currentPatch.Biome.Compounds["ammonia"].Density *
             currentPatch.Biome.Compounds["ammonia"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "ammonia"))
+                currentPatch, "ammonia"))
         {
             patchAmmoniaSituation.Texture = IncreaseIcon;
         }
         else if (nextCompound < currentPatch.Biome.Compounds["ammonia"].Density *
             currentPatch.Biome.Compounds["ammonia"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "ammonia"))
+                currentPatch, "ammonia"))
         {
             patchAmmoniaSituation.Texture = DecreaseIcon;
         }
@@ -1112,17 +1285,17 @@ public class MicrobeEditorGUI : Node
 
         nextCompound = selectedPatch.Biome.Compounds["phosphates"].Density *
             selectedPatch.Biome.Compounds["phosphates"].Amount + GetPatchChunkTotalCompoundAmount(
-            selectedPatch, "phosphates");
+                selectedPatch, "phosphates");
 
         if (nextCompound > currentPatch.Biome.Compounds["phosphates"].Density *
             currentPatch.Biome.Compounds["phosphates"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "phosphates"))
+                currentPatch, "phosphates"))
         {
             patchPhosphateSituation.Texture = IncreaseIcon;
         }
         else if (nextCompound < currentPatch.Biome.Compounds["phosphates"].Density *
             currentPatch.Biome.Compounds["phosphates"].Amount + GetPatchChunkTotalCompoundAmount(
-            currentPatch, "phosphates"))
+                currentPatch, "phosphates"))
         {
             patchPhosphateSituation.Texture = DecreaseIcon;
         }
@@ -1140,7 +1313,7 @@ public class MicrobeEditorGUI : Node
         {
             var chunk = patch.Biome.Chunks[chunkKey];
 
-            if (chunk.Density != 0 && chunk.Compounds.ContainsKey(compoundName))
+            if (chunk.Density > 0 && chunk.Compounds.ContainsKey(compoundName))
             {
                 result += chunk.Density * chunk.Compounds[compoundName].Amount;
             }
@@ -1179,19 +1352,19 @@ public class MicrobeEditorGUI : Node
         // Compounds
         patchHydrogenSulfide.Text = Math.Round(patch.Biome.Compounds["hydrogensulfide"].Density *
             patch.Biome.Compounds["hydrogensulfide"].Amount + GetPatchChunkTotalCompoundAmount(
-            patch, "hydrogensulfide"), 3) + "%";
+                patch, "hydrogensulfide"), 3) + "%";
 
         patchAmmonia.Text = Math.Round(patch.Biome.Compounds["ammonia"].Density *
             patch.Biome.Compounds["ammonia"].Amount + GetPatchChunkTotalCompoundAmount(
-            patch, "ammonia"), 3) + "%";
+                patch, "ammonia"), 3) + "%";
 
         patchGlucose.Text = Math.Round(patch.Biome.Compounds["glucose"].Density *
             patch.Biome.Compounds["glucose"].Amount + GetPatchChunkTotalCompoundAmount(
-            patch, "glucose"), 3) + "%";
+                patch, "glucose"), 3) + "%";
 
         patchPhosphate.Text = Math.Round(patch.Biome.Compounds["phosphates"].Density *
             patch.Biome.Compounds["phosphates"].Amount + GetPatchChunkTotalCompoundAmount(
-            patch, "phosphates"), 3) + "%";
+                patch, "phosphates"), 3) + "%";
 
         patchIron.Text = GetPatchChunkTotalCompoundAmount(patch, "iron") + "%";
 
@@ -1207,8 +1380,18 @@ public class MicrobeEditorGUI : Node
         foreach (var species in patch.SpeciesInPatch.Keys)
         {
             var speciesLabel = new Label();
-            speciesLabel.Text = species.FormattedName + " with population: " + species.Population;
+            speciesLabel.Text = species.FormattedName + " with population: " + patch.GetSpeciesPopulation(species);
             speciesList.AddChild(speciesLabel);
+
+            // Yes, apparently this has to be done so that the rect size is updated immediately
+            speciesList.RectSize = speciesList.RectSize;
+
+            if (speciesListIsHidden)
+            {
+                // Adjust the species list's clipping area's "height" value
+                var clip = speciesList.GetParent<MarginContainer>();
+                clip.AddConstantOverride("margin_top", -(int)speciesList.RectSize.y);
+            }
         }
 
         // Enable move to patch button if this is a valid move

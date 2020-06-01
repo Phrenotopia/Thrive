@@ -12,6 +12,8 @@ public class MicrobeStage : Node
     private MicrobeAISystem microbeAISystem;
     private PatchManager patchManager;
 
+    private DirectionalLight worldLight;
+
     /// <summary>
     ///   Used to differentiate between spawning the player and respawning
     /// </summary>
@@ -66,6 +68,7 @@ public class MicrobeStage : Node
         spawner = new SpawnSystem(rootOfDynamicallySpawned);
         Camera = world.GetNode<MicrobeCamera>("PrimaryCamera");
         Clouds = world.GetNode<CompoundCloudSystem>("CompoundClouds");
+        worldLight = world.GetNode<DirectionalLight>("WorldLight");
         TimedLifeSystem = new TimedLifeSystem(rootOfDynamicallySpawned);
         ProcessSystem = new ProcessSystem(rootOfDynamicallySpawned);
         microbeAISystem = new MicrobeAISystem(rootOfDynamicallySpawned);
@@ -108,13 +111,10 @@ public class MicrobeStage : Node
 
         CreatePatchManagerIfNeeded();
 
-        patchManager.ApplyChangedPatchSettingsIfNeeded(GameWorld.Map.CurrentPatch);
-        UpdateBackground();
+        UpdatePatchSettings();
 
         SpawnPlayer();
         Camera.ResetHeight();
-
-        HUD.UpdatePatchInfo(GameWorld.Map.CurrentPatch.Name);
     }
 
     public void StartMusic()
@@ -185,7 +185,6 @@ public class MicrobeStage : Node
         if (gameOver)
         {
             // Player is extinct and has lost the game
-
             // Show the game lost popup if not already visible
             HUD.ShowExtinctionBox();
 
@@ -226,6 +225,12 @@ public class MicrobeStage : Node
     /// </summary>
     public void MoveToEditor()
     {
+        // Increase the population by the constant for the player reproducing
+        var playerSpecies = GameWorld.PlayerSpecies;
+        GameWorld.AlterSpeciesPopulation(
+            playerSpecies, Constants.PLAYER_REPRODUCTION_POPULATION_GAIN_CONSTANT,
+            "player reproduced", false, Constants.PLAYER_REPRODUCTION_POPULATION_GAIN_COEFFICIENT);
+
         var scene = GD.Load<PackedScene>("res://src/microbe_stage/editor/MicrobeEditor.tscn");
 
         var editor = (MicrobeEditor)scene.Instance();
@@ -237,14 +242,17 @@ public class MicrobeStage : Node
         parent.AddChild(editor);
     }
 
+    public void ReturnToMenu()
+    {
+        GUICommon.Instance.ReturnToMenu(this);
+    }
+
     /// <summary>
     ///   Called when returning from the editor
     /// </summary>
     public void OnReturnFromEditor()
     {
-        patchManager.ApplyChangedPatchSettingsIfNeeded(GameWorld.Map.CurrentPatch);
-        HUD.UpdatePatchInfo(GameWorld.Map.CurrentPatch.Name);
-        UpdateBackground();
+        UpdatePatchSettings();
 
         // Now the editor increases the generation so we don't do that here anymore
 
@@ -269,7 +277,6 @@ public class MicrobeStage : Node
 
         HUD.OnEnterStageTransition();
         HUD.HideReproductionDialog();
-        HUD.UpdatePatchInfo(GameWorld.Map.CurrentPatch.Name);
 
         StartMusic();
     }
@@ -279,7 +286,7 @@ public class MicrobeStage : Node
         if (patchManager != null)
             return;
         patchManager = new PatchManager(spawner, ProcessSystem, Clouds, TimedLifeSystem,
-            CurrentGame);
+            worldLight, CurrentGame);
     }
 
     /// <summary>
@@ -289,8 +296,10 @@ public class MicrobeStage : Node
     {
         var playerSpecies = GameWorld.PlayerSpecies;
 
-        // Decrease the population by 20
-        GameWorld.AlterSpeciesPopulation(playerSpecies, -20, "player died", true);
+        // Decrease the population by the constant for the player dying
+        GameWorld.AlterSpeciesPopulation(
+            playerSpecies, Constants.PLAYER_DEATH_POPULATION_LOSS_CONSTANT,
+            "player died", true, Constants.PLAYER_DEATH_POPULATION_LOSS_COEFFICIENT);
 
         // Respawn if not extinct (or freebuild)
         if (playerSpecies.Population <= 0 && !CurrentGame.FreeBuild)
@@ -302,6 +311,16 @@ public class MicrobeStage : Node
             // Player is not extinct, so can respawn
             SpawnPlayer();
         }
+    }
+
+    private void UpdatePatchSettings()
+    {
+        patchManager.ApplyChangedPatchSettingsIfNeeded(GameWorld.Map.CurrentPatch);
+
+        HUD.UpdatePatchInfo(GameWorld.Map.CurrentPatch.Name);
+        HUD.UpdateEnvironmentalBars(GameWorld.Map.CurrentPatch.Biome);
+
+        UpdateBackground();
     }
 
     private void UpdateBackground()
